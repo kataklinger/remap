@@ -10,13 +10,18 @@
 #include <utility>
 
 namespace kpr {
+static inline constexpr uint8_t code_length = 13;
+static inline constexpr uint8_t code_max_index = code_length - 1;
+
+using code = std::array<std::byte, code_length>;
 using point = std::tuple<mrl::size_type, mrl::size_type>;
 
-static inline constexpr uint8_t keycode_length = 13;
-using code = std::array<std::byte, keycode_length>;
+[[nodiscard]] inline std::byte weight(code const& value) noexcept {
+  return value[code_max_index] & static_cast<std::byte>(0xf);
+}
 
 struct code_hash {
-  std::size_t operator()(code const& key) const noexcept {
+  [[nodiscard]] std::size_t operator()(code const& key) const noexcept {
     std::size_t hashed = 2166136261U;
     for (auto value : key) {
       hashed ^= static_cast<std::size_t>(value);
@@ -79,47 +84,78 @@ template<std::size_t InSize, typename Outer, typename Inner>
 using grid_explode = typename details::
     explode<InSize, std::decay_t<Outer>, std::decay_t<Inner>>::type;
 
-struct grid {
+class region {
 public:
-  using section =
+  static inline constexpr std::size_t max_weight{3};
+
+  using points_store =
       std::unordered_multimap<code, point, code_hash, std::equal_to<code>>;
+  using count_store = std::array<std::size_t, max_weight>;
 
-  static inline constexpr std::size_t section_count{8};
+public:
+  inline void add(std::pair<code, point>&& point) {
+    auto w{weight(point.first)};
 
-  using storage = std::array<section, section_count>;
+    points_.insert(std::move(point));
+
+    ++weight_count_[static_cast<std::size_t>(w)];
+  }
+
+  inline void clear() noexcept {
+    points_.clear();
+  }
+
+  [[nodiscard]] inline points_store const& points() const noexcept {
+    return points_;
+  }
+
+  [[nodiscard]] inline count_store const& counts() const noexcept {
+    return weight_count_;
+  }
+
+private:
+  points_store points_;
+  count_store weight_count_;
+};
+
+class grid {
+public:
+  static inline constexpr std::size_t region_count{8};
+
+  using region_store = std::array<region, region_count>;
 
 public:
   template<std::size_t... Idxs>
   inline void
-      add(code const& key, point point, std::index_sequence<Idxs...> /**/) {
-    add_intern(key, point, std::integral_constant<std::size_t, Idxs>{}...);
+      add(code const& key, point pt, std::index_sequence<Idxs...> /**/) {
+    add_intern(key, pt, std::integral_constant<std::size_t, Idxs>{}...);
   }
 
   inline void clear() noexcept {
-    for (auto& section : sections_) {
-      section.clear();
+    for (auto& region : regions_) {
+      region.clear();
     }
   }
 
-  inline storage const& sections() const noexcept {
-    return sections_;
+  [[nodiscard]] inline region_store const& regions() const noexcept {
+    return regions_;
   }
 
 private:
   template<typename... Idxs>
-  inline void add_intern(code const& key, point point, Idxs... idxs) {
-    ((( void )add_intern(key, point, idxs)), ...);
+  inline void add_intern(code const& key, point pt, Idxs... idxs) {
+    ((( void )add_intern(key, pt, idxs)), ...);
   }
 
   template<std::size_t Idx>
   inline void add_intern(code const& key,
-                         point point,
+                         point pt,
                          std::integral_constant<std::size_t, Idx> /*unused*/) {
-    sections_[Idx].insert({key, point});
+    regions_[Idx].add({key, pt});
   }
 
 private:
-  storage sections_;
+  region_store regions_;
 };
 
 } // namespace kpr

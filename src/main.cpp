@@ -54,13 +54,13 @@ int main() {
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
 
-  for (auto const& section : extractor.grid().sections()) {
-    for (auto const& keypoint : section) {
+  for (auto const& region : extractor.grid().regions()) {
+    for (auto const& keypoint : region.points()) {
       auto const& [x, y] = keypoint.second;
       std::size_t offset{y * image.width() + x};
 
-      diff.data()[offset] = {static_cast<std::uint8_t>(
-          keypoint.first[12] & static_cast<std::byte>(0xf))};
+      diff.data()[offset] = {
+          static_cast<std::uint8_t>(kpr::weight(keypoint.first))};
     }
   }
 
