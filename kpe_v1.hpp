@@ -19,28 +19,22 @@ namespace v1 {
   public:
     extractor(mrl::size_type width, mrl::size_type height)
         : temp_{width, height} {
-      units_[0] = _mm_setr_epi8(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[1] = _mm_setr_epi8(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[2] = _mm_setr_epi8(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[3] = _mm_setr_epi8(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[4] = _mm_setr_epi8(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[5] = _mm_setr_epi8(0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[6] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[7] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0);
-      units_[8] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
-      units_[9] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
-      units_[10] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
-      units_[11] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
-      units_[12] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
-      units_[13] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
-      units_[14] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
-      units_[15] =
-          _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+      unit_[0] = _mm_setr_epi8(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[1] = _mm_setr_epi8(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[2] = _mm_setr_epi8(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[3] = _mm_setr_epi8(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[4] = _mm_setr_epi8(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[5] = _mm_setr_epi8(0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[6] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[7] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0);
+      unit_[8] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
+      unit_[9] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
+      unit_[10] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+      unit_[11] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
+      unit_[12] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+      unit_[13] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
+      unit_[14] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+      unit_[15] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
     }
 
     void extract(mrl::matrix<cpl::nat_cc> const& image,
@@ -304,20 +298,20 @@ namespace v1 {
     inline [[nodiscard]] __m256i get_unit(cpl::nat_ov low,
                                           cpl::nat_ov hi) const noexcept {
       return _mm256_inserti128_si256(
-          _mm256_castsi128_si256(units_[low.value]), units_[hi.value], 1);
+          _mm256_castsi128_si256(unit_[low.value]), unit_[hi.value], 1);
     }
 
     inline [[nodiscard]] __m256i get_unit_low(cpl::nat_ov low) const noexcept {
-      return _mm256_castsi128_si256(units_[low.value]);
+      return _mm256_castsi128_si256(unit_[low.value]);
     }
 
     inline [[nodiscard]] __m256i get_unit_hi(cpl::nat_ov hi) const noexcept {
       return _mm256_inserti128_si256(
-          _mm256_castsi128_si256({}), units_[hi.value], 1);
+          _mm256_castsi128_si256({}), unit_[hi.value], 1);
     }
 
   private:
-    __m128i units_[16];
+    __m128i unit_[16];
 
     mrl::matrix<__m256i> temp_;
     kpr::grid grid_;
