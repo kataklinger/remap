@@ -4,7 +4,14 @@ project ("remap")
 
 find_package(libpng CONFIG REQUIRED)
 
-add_executable (remap "main.cpp" "cpl.hpp" "mrl.hpp" "kpr.hpp" "kpe_v1.hpp" "kpe_v2.hpp" "pngu.hpp")
+add_executable (remap
+	"src/cpl.hpp"
+	"src/mrl.hpp"
+	"src/kpr.hpp"
+	"src/kpe_v1.hpp"
+	"src/kpe_v2.hpp"
+	"src/pngu.hpp"
+	"src/main.cpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)
