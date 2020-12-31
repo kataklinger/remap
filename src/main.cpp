@@ -10,13 +10,15 @@
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
 
+using extractor_t = kpe::v1::extractor<kpr::grid<4, 2>, 16>;
+
 inline uint64_t now() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
 }
 
-void perf_test(kpe::v1::extractor& extractor,
+void perf_test(extractor_t& extractor,
                mrl::matrix<cpl::nat_cc> const& image,
                mrl::matrix<cpl::nat_cc>& median,
                std::size_t count) {
@@ -46,7 +48,7 @@ int main() {
              screen_width * screen_height);
   input.close();
 
-  kpe::v1::extractor extractor{screen_width, screen_height};
+  extractor_t extractor{screen_width, screen_height};
 
   // perf_test(extractor, image, median, 100);
 

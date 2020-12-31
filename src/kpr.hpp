@@ -4,6 +4,7 @@
 #include "mrl.hpp"
 
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <unordered_map>
@@ -118,9 +119,15 @@ private:
   count_store weight_count_;
 };
 
+template<std::size_t Width, std::size_t Height>
 class grid {
+  static_assert(Width > 0);
+  static_assert(Height > 0);
+
 public:
-  static inline constexpr std::size_t region_count{8};
+  static inline constexpr std::size_t width{Width};
+  static inline constexpr std::size_t height{Height};
+  static inline constexpr std::size_t region_count{width * height};
 
   using region_store = std::array<region, region_count>;
 
@@ -156,6 +163,18 @@ private:
 
 private:
   region_store regions_;
+};
+
+template<typename Ty>
+concept grid_size = std::unsigned_integral<std::decay_t<Ty>>;
+
+template<typename Ty>
+concept gridlike = requires(Ty g) {
+  { Ty::width }
+  ->grid_size<>;
+  { Ty::height }
+  ->grid_size<>;
+  {g.clear()};
 };
 
 } // namespace kpr

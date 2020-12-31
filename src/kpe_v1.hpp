@@ -11,30 +11,77 @@ namespace kpe {
 namespace v1 {
   using ksize_t = std::uint8_t;
 
+  inline constexpr ksize_t kernel_size{5};
+  inline constexpr ksize_t kernel_half{kernel_size / 2};
+
+  namespace details {
+    class vec_unit {
+    public:
+      inline vec_unit() noexcept {
+        // clang-format off
+        unit_[ 0] = _mm_setr_epi8(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 1] = _mm_setr_epi8(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 2] = _mm_setr_epi8(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 3] = _mm_setr_epi8(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 4] = _mm_setr_epi8(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 5] = _mm_setr_epi8(0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 6] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 7] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 8] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
+        unit_[ 9] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
+        unit_[10] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+        unit_[11] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
+        unit_[12] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+        unit_[13] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
+        unit_[14] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        unit_[15] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        // clang-format on
+      }
+
+      [[nodiscard]] inline __m256i get(cpl::nat_ov low,
+                                       cpl::nat_ov hi) const noexcept {
+        return _mm256_inserti128_si256(
+            _mm256_castsi128_si256(unit_[low.value]), unit_[hi.value], 1);
+      }
+
+      [[nodiscard]] inline __m256i get_low(cpl::nat_ov low) const noexcept {
+        return _mm256_castsi128_si256(unit_[low.value]);
+      }
+
+      [[nodiscard]] inline __m256i get_hi(cpl::nat_ov hi) const noexcept {
+        return _mm256_inserti128_si256(
+            _mm256_castsi128_si256({}), unit_[hi.value], 1);
+      }
+
+    private:
+      __m128i unit_[16];
+    };
+
+    [[nodiscard]] inline std::uint64_t
+        push_pixel_buffer(std::uint64_t buffer, cpl::nat_ov pixel) noexcept {
+      return (buffer >> 4) | (static_cast<std::uint64_t>(pixel.value)
+                              << (4 * (kernel_size - 1)));
+    }
+  } // namespace details
+
+  template<kpr::gridlike Grid, std::size_t Overlap>
   class extractor {
   public:
-    static inline constexpr ksize_t kernel_size = 5;
-    static inline constexpr ksize_t kernel_half = kernel_size / 2;
+    using grid_type = Grid;
+
+  private:
+    template<typename Outer, typename Inner>
+    using explode_t = kpr::grid_explode<grid_type::height, Outer, Inner>;
+
+    inline static constexpr auto reg_overlap{Overlap};
 
   public:
-    extractor(mrl::size_type width, mrl::size_type height)
-        : temp_{width, height} {
-      unit_[0] = _mm_setr_epi8(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[1] = _mm_setr_epi8(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[2] = _mm_setr_epi8(0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[3] = _mm_setr_epi8(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[4] = _mm_setr_epi8(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[5] = _mm_setr_epi8(0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[6] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[7] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0);
-      unit_[8] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
-      unit_[9] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
-      unit_[10] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
-      unit_[11] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
-      unit_[12] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
-      unit_[13] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
-      unit_[14] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
-      unit_[15] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+    inline extractor(mrl::size_type width, mrl::size_type height)
+        : temp_{width, height}
+        , reg_width_{width / grid_type::width - reg_overlap / 2}
+        , reg_height_{height / grid_type::height - reg_overlap / 2}
+        , reg_excl_stride_{height * reg_width_}
+        , reg_mid_stride_{height * reg_overlap} {
     }
 
     void extract(mrl::matrix<cpl::nat_cc> const& image,
@@ -51,7 +98,7 @@ namespace v1 {
       col_out(image, median);
     }
 
-    [[nodiscard]] kpr::grid const& grid() const noexcept {
+    [[nodiscard]] grid_type const& grid() const noexcept {
       return grid_;
     }
 
@@ -60,21 +107,21 @@ namespace v1 {
       auto last{row + temp_.width()};
 
       auto pixel{cpl::native_to_ordered(*(row++))};
-      auto buffer{push_pixel_buffer({}, pixel)};
+      auto buffer{details::push_pixel_buffer({}, pixel)};
 
-      __m256i sum{get_unit_hi(pixel)};
+      __m256i sum{unit_.get_hi(pixel)};
 
       for (auto i{0}; i < 3; ++i) {
         pixel = native_to_ordered(*(row++));
-        buffer = push_pixel_buffer(buffer, pixel);
+        buffer = details::push_pixel_buffer(buffer, pixel);
 
-        sum = _mm256_add_epi8(sum, get_unit(pixel, pixel));
+        sum = _mm256_add_epi8(sum, unit_.get(pixel, pixel));
       }
 
       pixel = native_to_ordered(*(row++));
-      buffer = push_pixel_buffer(buffer, pixel);
+      buffer = details::push_pixel_buffer(buffer, pixel);
 
-      sum = _mm256_add_epi8(sum, get_unit_hi(pixel));
+      sum = _mm256_add_epi8(sum, unit_.get_hi(pixel));
 
       output += temp_.height() * kernel_half;
       *output = sum;
@@ -84,21 +131,14 @@ namespace v1 {
 
         sum = _mm256_add_epi8(
             _mm256_sub_epi8(sum,
-                            get_unit({(buffer >> 4) & 0xf}, {buffer & 0xf})),
-            get_unit({(buffer >> (4 * (kernel_size - 1))) & 0xf}, pixel));
+                            unit_.get({(buffer >> 4) & 0xf}, {buffer & 0xf})),
+            unit_.get({(buffer >> (4 * (kernel_size - 1))) & 0xf}, pixel));
 
         output += temp_.height();
         *output = sum;
 
-        buffer = push_pixel_buffer(buffer, pixel);
+        buffer = details::push_pixel_buffer(buffer, pixel);
       }
-    }
-
-    inline [[nodiscard]] std::uint64_t
-        push_pixel_buffer(std::uint64_t buffer,
-                          cpl::nat_ov pixel) const noexcept {
-      return (buffer >> 4) | (static_cast<std::uint64_t>(pixel.value)
-                              << (4 * (kernel_size - 1)));
     }
 
     void col_out(mrl::matrix<cpl::nat_cc> const& image,
@@ -107,49 +147,54 @@ namespace v1 {
       auto raw{start + kernel_half};
       auto out{median.data() + (median.width() + 1) * kernel_half};
 
-      auto exl_sect_size{(temp_.width() / 4 - 8) * image.height()};
-      auto mid_sect_size{16 * image.height()};
+      col_out_gen<grid_type::width>(start, raw, out);
+    }
 
-      auto first{temp_.data() + image.height() * kernel_half},
-          last{temp_.data() + exl_sect_size};
+    template<std::size_t Sect>
+    inline auto col_out_gen(cpl::nat_cc const* start,
+                            cpl::nat_cc const*& raw,
+                            cpl::nat_cc*& out) {
+      if constexpr (Sect > 0) {
+        if constexpr (Sect < grid_type::width) {
+          using low_t = std::index_sequence<Sect - 1>;
+          using mid_t = std::index_sequence<Sect - 1, Sect>;
 
-      auto next_sect = [&first, &last](std::size_t delta) {
-        first = last;
-        last = first + delta;
-      };
+          auto first{col_out_gen<Sect - 1>(start, raw, out)};
+          auto last{first + reg_excl_stride_};
 
-      col_out_sect(start, raw, out, first, last, std::index_sequence<0>{});
+          col_out_reg<low_t>(start, raw, out, first, last);
 
-      next_sect(mid_sect_size);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<0, 1>{});
+          first = last;
+          last += reg_mid_stride_;
 
-      next_sect(exl_sect_size);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<1>{});
+          col_out_reg<mid_t>(start, raw, out, first, last);
 
-      next_sect(mid_sect_size);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<1, 2>{});
+          return last;
+        }
+        else {
+          using seq_t = std::index_sequence<Sect - 1>;
 
-      next_sect(exl_sect_size);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<2>{});
+          auto first{col_out_gen<Sect - 1>(start, raw, out)};
+          auto last{temp_.data() +
+                    temp_.height() * (temp_.width() - kernel_half)};
 
-      next_sect(mid_sect_size);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<2, 3>{});
-
-      first = last;
-      last = temp_.data() + image.height() * (image.width() - kernel_half);
-      col_out_sect(start, raw, out, first, last, std::index_sequence<3>{});
+          col_out_reg<seq_t>(start, raw, out, first, last);
+        }
+      }
+      else {
+        return temp_.data() + temp_.height() * kernel_half;
+      }
     }
 
     template<typename Outer>
-    void col_out_sect(cpl::nat_cc const* row,
-                      cpl::nat_cc const*& raw,
-                      cpl::nat_cc*& out,
-                      __m256i const* first,
-                      __m256i const* last,
-                      Outer /*unused*/) {
+    void col_out_reg(cpl::nat_cc const* start,
+                     cpl::nat_cc const*& raw,
+                     cpl::nat_cc*& out,
+                     __m256i const* first,
+                     __m256i const* last) {
       for (; first < last; first += temp_.height(), ++raw, ++out) {
-        auto x = static_cast<mrl::size_type>(raw - row);
-        col_in(x, raw, first, out, Outer{});
+        auto x = static_cast<mrl::size_type>(raw - start);
+        col_in<Outer>(x, raw, first, out);
       }
     }
 
@@ -157,20 +202,15 @@ namespace v1 {
     void col_in(mrl::size_type x,
                 cpl::nat_cc const* raw,
                 __m256i const* col,
-                cpl::nat_cc* out,
-                Outer /*unused*/) {
-      constexpr std::index_sequence<0> lseq{};
-      constexpr std::index_sequence<0, 1> mseq{};
-      constexpr std::index_sequence<1> hseq{};
-
+                cpl::nat_cc* out) {
       auto first{col};
 
-      __m256i sum5{*(col++)};
-      __m256i sum3{*(col++)};
+      __m256i sum5{*(first++)};
+      __m256i sum3{*(first++)};
 
-      sum3 = _mm256_add_epi8(sum3, *(col++));
-      sum3 = _mm256_add_epi8(sum3, *(col++));
-      sum5 = _mm256_add_epi8(sum5, *(col++));
+      sum3 = _mm256_add_epi8(sum3, *(first++));
+      sum3 = _mm256_add_epi8(sum3, *(first++));
+      sum5 = _mm256_add_epi8(sum5, *(first++));
       sum5 = _mm256_add_epi8(sum5, sum3);
 
       [[unlikely]] if (auto weight{compute_pixel(*raw, sum3, sum5, out)};
@@ -179,29 +219,59 @@ namespace v1 {
         encode_keypoint(raw, code.data(), weight);
         grid_.add(code,
                   kpr::point{x, kernel_half},
-                  kpr::grid_explode<2, Outer, decltype(lseq)>{});
+                  explode_t<Outer, std::index_sequence<0>>{});
       }
 
-      auto lend{first + (temp_.height() / 2) - 8};
-      auto mend{lend + 16};
-      auto hend{first + temp_.height()};
+      col_in_gen<grid_type::height, Outer>(x, raw, col, out, sum3, sum5);
+    }
 
-      col_in_sect(x, raw, first, out, sum3, sum5, col, lend, Outer{}, lseq);
-      col_in_sect(x, raw, first, out, sum3, sum5, lend, mend, Outer{}, mseq);
-      col_in_sect(x, raw, first, out, sum3, sum5, mend, hend, Outer{}, hseq);
+    template<std::size_t Sect, typename Outer>
+    inline auto col_in_gen(mrl::size_type x,
+                           cpl::nat_cc const*& raw,
+                           __m256i const* col,
+                           cpl::nat_cc*& out,
+                           __m256i& sum3,
+                           __m256i& sum5) {
+      if constexpr (Sect > 0) {
+        if constexpr (Sect < grid_type::height) {
+          using low_t = std::index_sequence<Sect - 1>;
+          using mid_t = std::index_sequence<Sect - 1, Sect>;
+
+          auto first{col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5)};
+          auto last{first + reg_height_};
+
+          col_in_reg<Outer, low_t>(x, raw, col, out, sum3, sum5, first, last);
+
+          first = last;
+          last += reg_overlap;
+
+          col_in_reg<Outer, mid_t>(x, raw, col, out, sum3, sum5, first, last);
+
+          return last;
+        }
+        else {
+          using seq_t = std::index_sequence<Sect - 1>;
+
+          auto first{col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5)};
+          auto last{col + temp_.height() - kernel_half};
+
+          col_in_reg<Outer, seq_t>(x, raw, col, out, sum3, sum5, first, last);
+        }
+      }
+      else {
+        return col + kernel_size;
+      }
     }
 
     template<typename Outer, typename Inner>
-    void col_in_sect(mrl::size_type x,
-                     cpl::nat_cc const*& raw,
-                     __m256i const* col,
-                     cpl::nat_cc*& out,
-                     __m256i& sum3,
-                     __m256i& sum5,
-                     __m256i const* first,
-                     __m256i const* last,
-                     Outer /*unused*/,
-                     Inner /*unused*/) {
+    void col_in_reg(mrl::size_type x,
+                    cpl::nat_cc const*& raw,
+                    __m256i const* col,
+                    cpl::nat_cc*& out,
+                    __m256i& sum3,
+                    __m256i& sum5,
+                    __m256i const* first,
+                    __m256i const* last) {
       for (; first < last; ++first) {
         raw += temp_.width();
         out += temp_.width();
@@ -216,8 +286,7 @@ namespace v1 {
 
           kpr::code code;
           encode_keypoint(raw, code.data(), weight);
-          grid_.add(
-              code, kpr::point{x, y}, kpr::grid_explode<2, Outer, Inner>{});
+          grid_.add(code, kpr::point{x, y}, explode_t<Outer, Inner>{});
         }
       }
     }
@@ -311,10 +380,16 @@ namespace v1 {
     }
 
   private:
-    __m128i unit_[16];
+    details::vec_unit unit_;
 
     mrl::matrix<__m256i> temp_;
-    kpr::grid grid_;
+    grid_type grid_;
+
+    std::size_t reg_width_;
+    std::size_t reg_height_;
+
+    std::size_t reg_excl_stride_;
+    std::size_t reg_mid_stride_;
   };
 
 } // namespace v1
