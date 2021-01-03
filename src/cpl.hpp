@@ -129,15 +129,14 @@ namespace details {
       buffer[i] = std::pair{i, native_to_intensity({i})};
     }
 
-    std::sort(begin(buffer), end(buffer), [](auto const& a, auto const& b) {
+    std::sort(begin(buffer), end(buffer), [](auto& a, auto& b) {
       return std::get<1>(a).value < std::get<1>(b).value;
     });
 
     std::array<nat_cc, 16> palette{};
-    std::transform(begin(buffer),
-                   end(buffer),
-                   begin(palette),
-                   [](auto const& e) { return nat_cc{std::get<0>(e)}; });
+    std::transform(begin(buffer), end(buffer), begin(palette), [](auto& e) {
+      return nat_cc{std::get<0>(e)};
+    });
 
     return palette;
   }
@@ -153,15 +152,14 @@ namespace details {
       buffer[i] = std::pair{i, ordered_to_native_map[i].value};
     }
 
-    std::sort(begin(buffer), end(buffer), [](auto const& a, auto const& b) {
+    std::sort(begin(buffer), end(buffer), [](auto& a, auto& b) {
       return std::get<1>(a) < std::get<1>(b);
     });
 
     std::array<nat_ov, 16> palette{};
-    std::transform(begin(buffer),
-                   end(buffer),
-                   begin(palette),
-                   [](auto const& e) { return nat_ov{std::get<0>(e)}; });
+    std::transform(begin(buffer), end(buffer), begin(palette), [](auto& e) {
+      return nat_ov{std::get<0>(e)};
+    });
 
     return palette;
   }
