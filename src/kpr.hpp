@@ -89,17 +89,15 @@ class region {
 public:
   static inline constexpr std::size_t max_weight{3};
 
+  using points_t = std::vector<point>;
   using points_store =
-      std::unordered_multimap<code, point, code_hash, std::equal_to<code>>;
+      std::unordered_map<code, points_t, code_hash, std::equal_to<code>>;
   using count_store = std::array<std::size_t, max_weight>;
 
 public:
-  inline void add(std::pair<code, point>&& point) {
-    auto w{weight(point.first)};
-
-    points_.insert(std::move(point));
-
-    ++weight_count_[static_cast<std::size_t>(w)];
+  inline void add(code const& key, point const& pt) {
+    points_[key].push_back(pt);
+    ++weight_count_[static_cast<std::size_t>(weight(key))];
   }
 
   inline void clear() noexcept {
@@ -158,7 +156,7 @@ private:
   inline void add_intern(code const& key,
                          point pt,
                          std::integral_constant<std::size_t, Idx> /*unused*/) {
-    regions_[Idx].add({key, pt});
+    regions_[Idx].add(key, pt);
   }
 
 private:
@@ -166,14 +164,13 @@ private:
 };
 
 template<typename Ty>
-concept grid_size = std::unsigned_integral<std::decay_t<Ty>>;
-
-template<typename Ty>
 concept gridlike = requires(Ty g) {
-  { Ty::width }
-  ->grid_size<>;
-  { Ty::height }
-  ->grid_size<>;
+  requires std::unsigned_integral<decltype(Ty::width)>;
+  requires Ty::width > 0;
+
+  requires std::unsigned_integral<decltype(Ty::height)>;
+  requires Ty::height > 0;
+
   {g.clear()};
 };
 
