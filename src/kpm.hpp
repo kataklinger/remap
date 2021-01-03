@@ -120,7 +120,7 @@ namespace details {
       }
     }
 
-    if (auto limit{std::min(top - 1, total.size())}; selected.size() > limit) {
+    if (auto limit{std::min(top, total.size())}; selected.size() > limit) {
       selected.resize(limit);
     }
 
@@ -149,8 +149,7 @@ namespace details {
   }
 
   template<match_config Cfg>
-  [[nodiscard]] ticket_t<Cfg> count(Cfg& config,
-                                    collector_t<Cfg> const& tickets) {
+  [[nodiscard]] totalizator_t<Cfg> count(collector_t<Cfg> const& tickets) {
     totalizator_t<Cfg> total;
 
     for (auto& ticket : tickets) {
@@ -160,7 +159,7 @@ namespace details {
       }
     }
 
-    return top_offsets(config, total, 2);
+    return total;
   }
 
   template<match_config Cfg>
@@ -198,6 +197,7 @@ template<match_config Cfg, std::size_t Width, std::size_t Height>
     tickets.push_back(vote(config, prev_regs[i], curr_regs[i]));
   }
 
-  return declare<Cfg>(count(config, tickets), gird_t::region_count);
+  return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2),
+                      gird_t::region_count);
 }
 } // namespace kpm

@@ -114,7 +114,7 @@ public:
 
 private:
   points_store points_;
-  count_store weight_count_;
+  count_store weight_count_{};
 };
 
 template<std::size_t Width, std::size_t Height>
