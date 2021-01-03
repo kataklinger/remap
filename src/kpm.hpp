@@ -3,6 +3,7 @@
 
 #include "kpr.hpp"
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <memory>
@@ -50,8 +51,10 @@ namespace details {
       std::equal_to<offset>,
       get_allocator<Cfg, std::pair<const offset, std::size_t>>>;
 
+  using vote_t = std::tuple<offset, std::size_t>;
+
   template<match_config Cfg>
-  using ticket_t = std::vector<offset, get_allocator<Cfg, offset>>;
+  using ticket_t = std::vector<vote_t, get_allocator<Cfg, vote_t>>;
 
   template<match_config Cfg>
   using collector_t =
@@ -95,30 +98,30 @@ namespace details {
   }
 
   template<match_config Cfg>
-  ticket_t<Cfg> top_offsets(Cfg& config, totalizator_t<Cfg> const& total) {
-    ticket_t<Cfg> selected{Cfg::region_votes + 1};
-    std::vector<std::size_t> counts{Cfg::region_votes + 1};
+  ticket_t<Cfg> top_offsets(Cfg& config,
+                            totalizator_t<Cfg> const& total,
+                            std::size_t top) {
+    ticket_t<Cfg> selected{top + 1};
 
-    for (auto& [off, cnt] : total) {
-      std::size_t i{Cfg::region_votes};
+    for (auto& added : total) {
+      auto i{top};
       while (i != 0) {
-        if (cnt > counts[--i]) {
-          counts[i + 1] = counts[i];
-          selected[i + 1] = selected[i];
+        auto& current = selected[--i];
+        if (std::get<1>(added) > std::get<1>(current)) {
+          selected[i + 1] = current;
         }
         else {
           break;
         }
       }
 
-      if (i < Cfg::region_votes - 1) {
-        counts[i] = cnt;
-        selected[i] = off;
+      if (i < top - 1) {
+        selected[i] = added;
       }
     }
 
-    if (selected.size() > Cfg::region_votes) {
-      selected.resize(Cfg::region_votes);
+    if (auto limit{std::min(top - 1, total.size())}; selected.size() > limit) {
+      selected.resize(limit);
     }
 
     return selected;
@@ -130,7 +133,8 @@ namespace details {
                                    kpr::region const& current,
                                    std::bool_constant<Switch> /*unused*/) {
     return top_offsets(config,
-                       count_offsets<Switch>(config, previous, current));
+                       count_offsets<Switch>(config, previous, current),
+                       Cfg::region_votes);
   }
 
   template<match_config Cfg>
@@ -144,42 +148,53 @@ namespace details {
   }
 
   template<match_config Cfg>
-  std::optional<offset> count(Cfg& config, collector_t<Cfg> const& tickets) {
+  ticket_t<Cfg> count(Cfg& config, collector_t<Cfg> const& tickets) {
     totalizator_t<Cfg> total;
 
     for (auto& ticket : tickets) {
       auto rank{Cfg::region_votes};
-      for (auto& vote : ticket) {
-        total[vote] += rank--;
+      for (auto& [off, cnt] : ticket) {
+        total[off] += rank--;
       }
     }
 
-    if (!total.empty()) {
-      auto& [off, cnt] = *std::max_element(
-          total.begin(), total.end(), [](auto& lhs, auto& rhs) {
-            return lhs.second < rhs.second;
-          });
+    return top_offsets(config, total, 2);
+  }
+
+  template<match_config Cfg>
+  std::optional<offset> declare(ticket_t<Cfg> const& top,
+                                std::size_t region_count) {
+    if (top.empty()) {
+      return {};
     }
 
-    return {};
+    if (top.size() > 1 &&
+        std::get<1>(top[0]) < std::get<1>(top[1]) + region_count / 2) {
+      return {};
+    }
+
+    return {std::get<0>(top[0])};
   }
+
 } // namespace details
 
 template<match_config Cfg, std::size_t Width, std::size_t Height>
 std::optional<offset> match(Cfg& config,
                             kpr::grid<Width, Height> const& previous,
                             kpr::grid<Width, Height> const& current) {
+  using namespace details;
+
   using gird_t = kpr::grid<Width, Height>;
 
-  details::collector_t<Cfg> tickets;
+  collector_t<Cfg> tickets;
   tickets.reserve(gird_t::region_count);
 
   auto &prev_regs{previous.regions()}, &curr_regs{current.regions()};
 
   for (std::size_t i{0}; i < gird_t::region_count; ++i) {
-    tickets.push_back(details::vote(config, prev_regs[i], curr_regs[i]));
+    tickets.push_back(vote(config, prev_regs[i], curr_regs[i]));
   }
 
-  return details::count(config, tickets);
+  return declare<Cfg>(count(config, tickets), gird_t::region_count);
 }
 } // namespace kpm
