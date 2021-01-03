@@ -10,6 +10,7 @@ add_executable (remap
 	"src/kpr.hpp"
 	"src/kpe_v1.hpp"
 	"src/kpe_v2.hpp"
+	"src/kpm.hpp"
 	"src/pngu.hpp"
 	"src/main.cpp")
 

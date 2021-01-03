@@ -1,5 +1,6 @@
 ﻿
 #include "kpe_v1.hpp"
+#include "kpm.hpp"
 #include "pngu.hpp"
 
 #include <chrono>
@@ -31,6 +32,12 @@ void perf_test(extractor_t& extractor,
   std::cout << "count = " << count << " time = " << end - start << "\n";
 }
 
+struct match_config {
+  using allocator_type = std::allocator<char>;
+  static constexpr std::size_t weight_switch{10};
+  static constexpr std::size_t region_votes{3};
+};
+
 int main() {
   std::filesystem::path ddir{"../../../data/"};
 
@@ -56,15 +63,18 @@ int main() {
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
 
-  for (auto const& region : extractor.grid().regions()) {
-    for (auto const& keypoint : region.points()) {
-      auto const& [x, y] = keypoint.second;
-      std::size_t offset{y * image.width() + x};
+  for (auto& region : extractor.grid().regions()) {
+    for (auto& [key, points] : region.points()) {
+      cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
 
-      diff.data()[offset] = {
-          static_cast<std::uint8_t>(kpr::weight(keypoint.first))};
+      for (auto& [x, y] : points) {
+        diff.data()[y * image.width() + x] = value;
+      }
     }
   }
+
+  match_config cfg;
+  kpm::match(cfg, extractor.grid(), extractor.grid());
 
   auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
@@ -73,6 +83,9 @@ int main() {
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
   png::write(ddir / "diff.png", screen_width, screen_height, rgb_d.data());
+
+  std::vector<std::vector<std::tuple<int, int>>> x;
+  x.push_back({});
 
   return 0;
 }
