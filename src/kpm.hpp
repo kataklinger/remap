@@ -109,14 +109,17 @@ namespace details {
         auto& current = selected[--i];
         if (std::get<1>(added) > std::get<1>(current)) {
           selected[i + 1] = current;
+          if (i == 0) {
+            selected[i] = added;
+            break;
+          }
         }
         else {
+          if (i < top - 1) {
+            selected[i + 1] = added;
+          }
           break;
         }
-      }
-
-      if (i < top - 1) {
-        selected[i] = added;
       }
     }
 
