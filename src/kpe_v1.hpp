@@ -84,8 +84,8 @@ namespace v1 {
         , reg_mid_stride_{height * reg_overlap} {
     }
 
-    void extract(mrl::matrix<cpl::nat_cc> const& image,
-                 mrl::matrix<cpl::nat_cc>& median) {
+    [[nodiscard]] grid_type extract(mrl::matrix<cpl::nat_cc> const& image,
+                                    mrl::matrix<cpl::nat_cc>& median) {
       grid_.clear();
 
       auto tmp = temp_.data();
@@ -96,10 +96,8 @@ namespace v1 {
       }
 
       col_out(image, median);
-    }
 
-    [[nodiscard]] grid_type const& grid() const noexcept {
-      return grid_;
+      return std::move(grid_);
     }
 
   private:

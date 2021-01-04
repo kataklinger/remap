@@ -25,7 +25,7 @@ void perf_test(extractor_t& extractor,
                std::size_t count) {
   auto start = now();
   for (auto i{count}; i > 0; --i) {
-    extractor.extract(image, median);
+    [[maybe_unused]] auto grid{extractor.extract(image, median)};
   }
   auto end = now();
 
@@ -59,11 +59,11 @@ int main() {
 
   // perf_test(extractor, image, median, 100);
 
-  extractor.extract(image, median);
+  auto grid{extractor.extract(image, median)};
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
 
-  for (auto& region : extractor.grid().regions()) {
+  for (auto& region : grid.regions()) {
     for (auto& [key, points] : region.points()) {
       cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
 
@@ -74,7 +74,7 @@ int main() {
   }
 
   match_config cfg;
-  kpm::match(cfg, extractor.grid(), extractor.grid());
+  auto result = kpm::match(cfg, grid, grid);
 
   auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
@@ -83,9 +83,6 @@ int main() {
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
   png::write(ddir / "diff.png", screen_width, screen_height, rgb_d.data());
-
-  std::vector<std::vector<std::tuple<int, int>>> x;
-  x.push_back({});
 
   return 0;
 }
