@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "all.hpp"
 #include "kpr.hpp"
 
 #include <algorithm>
@@ -36,12 +37,14 @@ concept match_config = requires(Ty cfg) {
   requires Ty::region_votes >= 1;
 
   typename Ty::allocator_type;
+
+  { cfg.get_allocator() }
+  ->std::convertible_to<typename Ty::allocator_type>;
 };
 
 namespace details {
   template<match_config Cfg, typename Ty>
-  using get_allocator = typename std::allocator_traits<
-      typename Cfg::allocator_type>::template rebind_alloc<Ty>;
+  using get_allocator = all::rebind_alloc_t<typename Cfg::allocator_type, Ty>;
 
   template<match_config Cfg>
   using totalizator_t = std::unordered_map<
@@ -79,7 +82,7 @@ namespace details {
   [[nodiscard]] totalizator_t<Cfg> count_offsets(Cfg& config,
                                                  kpr::region const& previous,
                                                  kpr::region const& current) {
-    totalizator_t<Cfg> total;
+    totalizator_t<Cfg> total{config.get_allocator()};
 
     auto& prev_group{previous.points()};
     for (auto& [key, curr] : current.points()) {
@@ -101,7 +104,7 @@ namespace details {
   [[nodiscard]] ticket_t<Cfg> top_offsets(Cfg& config,
                                           totalizator_t<Cfg> const& total,
                                           std::size_t top) {
-    ticket_t<Cfg> selected{top + 1};
+    ticket_t<Cfg> selected{top + 1, config.get_allocator()};
 
     for (auto& added : total) {
       auto i{top};
@@ -153,7 +156,7 @@ namespace details {
 
   template<match_config Cfg>
   [[nodiscard]] totalizator_t<Cfg> count(collector_t<Cfg> const& tickets) {
-    totalizator_t<Cfg> total;
+    totalizator_t<Cfg> total{tickets.get_allocator()};
 
     for (auto& ticket : tickets) {
       auto rank{Cfg::region_votes};
@@ -191,7 +194,7 @@ template<match_config Cfg, std::size_t Width, std::size_t Height>
 
   using gird_t = kpr::grid<Width, Height>;
 
-  collector_t<Cfg> tickets;
+  collector_t<Cfg> tickets{config.get_allocator()};
   tickets.reserve(gird_t::region_count);
 
   auto &prev_regs{previous.regions()}, &curr_regs{current.regions()};

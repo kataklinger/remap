@@ -1,4 +1,5 @@
 ﻿
+#include "cte_v1.hpp"
 #include "kpe_v1.hpp"
 #include "kpm.hpp"
 #include "pngu.hpp"
@@ -7,6 +8,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+
+#include <cstring>
+#include <queue>
 
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
@@ -36,6 +40,10 @@ struct match_config {
   using allocator_type = std::allocator<char>;
   static constexpr std::size_t weight_switch{10};
   static constexpr std::size_t region_votes{3};
+
+  allocator_type get_allocator() const noexcept {
+    return allocator_type{};
+  }
 };
 
 int main() {
@@ -79,6 +87,9 @@ int main() {
   auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
+
+  cte::v1::extractor<> cext{screen_width, screen_height, {}};
+  cext.extract(median);
 
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
