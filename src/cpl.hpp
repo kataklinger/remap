@@ -23,6 +23,7 @@ struct grs_intensity_value_t {};
 template<pixel_color Ty, typename Tag>
 struct color_t {
   Ty value;
+  friend auto operator<=>(color_t const&, color_t const&) = default;
 };
 
 using rgb_cc = color_t<std::uint8_t, rgb_component_color_t>;
