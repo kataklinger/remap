@@ -79,7 +79,7 @@ namespace v1 {
     using allocator_type = Alloc;
     using contour_type = contour<allocator_type>;
 
-    using contoures =
+    using contours =
         std::vector<contour_type,
                     all::rebind_alloc_t<allocator_type, contour_type>>;
 
@@ -104,9 +104,10 @@ namespace v1 {
     }
 
   public:
-    [[nodiscard]] contoures extract(mrl::matrix<cpl::nat_cc> const& image) {
-      contoures extracted{allocator_};
+    [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& image) {
+      clear_state();
 
+      contours extracted{allocator_};
       for (auto position{image.data() + image.width() + 1},
            last{image.end() - image.width() + 1};
            position < last;
@@ -115,20 +116,18 @@ namespace v1 {
         process_row(image.data(), position, extracted);
       }
 
-      clear_state();
-
       return extracted;
     }
 
   private:
     inline void process_row(cpl::nat_cc const* image,
                             cpl::nat_cc const* position,
-                            contoures& output) {
+                            contours& output) {
       std::uint32_t id{0};
 
       for (auto last{position + state_.width() - 2}; position < last;
            ++position) {
-        if (state_.data()[image - position].id_ != 0) {
+        if (state_.data()[position - image].id_ == 0) {
           output.emplace_back(extract_single(image, position, ++id));
         }
       }
@@ -139,10 +138,10 @@ namespace v1 {
                                               std::uint32_t id) {
       contour_type result{image, id, allocator_};
 
-      path_.push(image);
+      path_.push(position);
       while (!path_.empty()) {
         auto pixel{path_.front()};
-        auto cell{state_.data() + (image - pixel)};
+        auto cell{state_.data() + (pixel - image)};
 
         push_pixel(pixel, cell, id, -state_.width());
         push_pixel(pixel, cell, id, +state_.width());
@@ -176,13 +175,20 @@ namespace v1 {
     }
 
     void clear_state() noexcept {
-      auto first{state_.data() + state_.width()};
-      auto size{(state_.width() - 2) * state_.height()};
+      auto first{state_.data()};
+      for (auto last{state_.data() + state_.width()}; first < last; ++first) {
+        *first = {.id_ = horizon_id};
+      }
 
+      auto size{(state_.width() - 2) * state_.height()};
       std::memset(first, 0, size * sizeof(state));
 
       for (auto last{first + size}; first <= last; first += state_.width()) {
         *first = *(first + state_.width() - 1) = {.id_ = horizon_id};
+      }
+
+      for (auto last{state_.end()}; first < last; ++first) {
+        *first = {.id_ = horizon_id};
       }
     }
 
