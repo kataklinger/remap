@@ -23,17 +23,21 @@ inline uint64_t now() {
       .count();
 }
 
-void perf_test(extractor_t& extractor,
-               mrl::matrix<cpl::nat_cc> const& image,
-               mrl::matrix<cpl::nat_cc>& median,
-               std::size_t count) {
+template<typename Fn>
+requires std::invocable<Fn> void
+    perf_test(Fn&& fn, std::size_t count, std::string const& name, bool run) {
+  if (!run) {
+    return;
+  }
+
   auto start = now();
   for (auto i{count}; i > 0; --i) {
-    [[maybe_unused]] auto grid{extractor.extract(image, median)};
+    fn();
   }
   auto end = now();
 
-  std::cout << "count = " << count << " time = " << end - start << "\n";
+  std::cout << "[ " << name << " ] "
+            << "[ count: " << count << "; time: " << end - start << " ]\n";
 }
 
 struct match_config {
@@ -65,12 +69,29 @@ int main() {
 
   extractor_t extractor{screen_width, screen_height};
 
-  // perf_test(extractor, image, median, 100);
+  perf_test(
+      [&image, &median, &extractor] {
+        [[maybe_unused]] auto grid{extractor.extract(image, median)};
+      },
+      100,
+      "median",
+      false);
 
   auto grid{extractor.extract(image, median)};
 
-  mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
+  match_config cfg;
+  perf_test(
+      [&cfg, &grid]() {
+        [[maybe_unused]] auto result{kpm::match(cfg, grid, grid)};
+      },
+      100,
+      "match",
+      false);
 
+  cte::v1::extractor<> cext{screen_width, screen_height, {}};
+  auto contours = cext.extract(median);
+
+  mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
   for (auto& region : grid.regions()) {
     for (auto& [key, points] : region.points()) {
       cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
@@ -81,15 +102,9 @@ int main() {
     }
   }
 
-  match_config cfg;
-  auto result = kpm::match(cfg, grid, grid);
-
   auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
-
-  cte::v1::extractor<> cext{screen_width, screen_height, {}};
-  cext.extract(median);
 
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
