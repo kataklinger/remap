@@ -99,13 +99,13 @@ namespace v1 {
                      mrl::size_type height,
                      allocator_type const& allocator)
         : allocator_{allocator}
-        , state_{width, height}
+        , walk_{width, height}
         , path_{path_containter{allocator}} {
     }
 
   public:
     [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& image) {
-      clear_state();
+      clear_walk();
 
       contours extracted{allocator_};
       for (auto position{image.data() + image.width() + 1},
@@ -124,10 +124,11 @@ namespace v1 {
                             cpl::nat_cc const* position,
                             contours& output) {
       std::uint32_t id{0};
+      auto walk{walk_.data()};
 
-      for (auto last{position + state_.width() - 2}; position < last;
+      for (auto last{position + walk_.width() - 2}; position < last;
            ++position) {
-        if (state_.data()[position - image].id_ == 0) {
+        if (walk[position - image].id_ == 0) {
           output.push_back(extract_single(image, position, ++id));
         }
       }
@@ -138,13 +139,16 @@ namespace v1 {
                                               std::uint32_t id) {
       contour_type result{image, id, allocator_};
 
+      auto width{walk_.width()};
+      auto walk{walk_.data()};
+
       path_.push(position);
       while (!path_.empty()) {
         auto pixel{path_.front()};
-        auto cell{state_.data() + (pixel - image)};
+        auto cell{walk + (pixel - image)};
 
-        push_pixel(pixel, cell, id, -state_.width());
-        push_pixel(pixel, cell, id, +state_.width());
+        push_pixel(pixel, cell, id, -width);
+        push_pixel(pixel, cell, id, +width);
 
         auto left{push_pixel(pixel, cell, id, -1)};
         auto right{push_pixel(pixel, cell, id, +1)};
@@ -174,21 +178,21 @@ namespace v1 {
       return true;
     }
 
-    void clear_state() noexcept {
-      auto first{state_.data()};
-      for (auto last{state_.data() + state_.width()}; first < last; ++first) {
+    void clear_walk() noexcept {
+      auto first{walk_.data()};
+      for (auto last{walk_.data() + walk_.width()}; first < last; ++first) {
         *first = {.id_ = horizon_id};
       }
 
-      auto size{(state_.width() - 2) * state_.height()};
+      auto size{(walk_.width() - 2) * walk_.height()};
       std::memset(first, 0, size * sizeof(state));
 
-      for (auto last{first + size - state_.width()}; first <= last;
-           first += state_.width()) {
-        *first = *(first + state_.width() - 1) = {.id_ = horizon_id};
+      for (auto last{first + size - walk_.width()}; first <= last;
+           first += walk_.width()) {
+        *first = *(first + walk_.width() - 1) = {.id_ = horizon_id};
       }
 
-      for (auto last{state_.end()}; first < last; ++first) {
+      for (auto last{walk_.end()}; first < last; ++first) {
         *first = {.id_ = horizon_id};
       }
     }
@@ -196,7 +200,7 @@ namespace v1 {
   private:
     [[no_unique_address]] allocator_type allocator_;
 
-    mrl::matrix<state> state_;
+    mrl::matrix<state> walk_;
     path_type path_;
   };
 } // namespace v1
