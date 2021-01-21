@@ -128,7 +128,7 @@ namespace v1 {
       for (auto last{position + state_.width() - 2}; position < last;
            ++position) {
         if (state_.data()[position - image].id_ == 0) {
-          output.emplace_back(extract_single(image, position, ++id));
+          output.push_back(extract_single(image, position, ++id));
         }
       }
     }
@@ -183,7 +183,8 @@ namespace v1 {
       auto size{(state_.width() - 2) * state_.height()};
       std::memset(first, 0, size * sizeof(state));
 
-      for (auto last{first + size}; first <= last; first += state_.width()) {
+      for (auto last{first + size - state_.width()}; first <= last;
+           first += state_.width()) {
         *first = *(first + state_.width() - 1) = {.id_ = horizon_id};
       }
 
