@@ -88,8 +88,13 @@ int main() {
       "match",
       false);
 
-  cte::v1::extractor<> cext{screen_width, screen_height, {}};
-  auto contours = cext.extract(median);
+  cte::v1::extractor<>::allocator_type alloc{};
+  cte::v1::extractor<> cext{screen_width, screen_height, alloc};
+
+  perf_test([&cext, &median]() { auto contours{cext.extract(median)}; },
+            100,
+            "contour",
+            true);
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
   for (auto& region : grid.regions()) {
