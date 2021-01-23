@@ -94,7 +94,14 @@ int main() {
   perf_test([&cext, &median]() { auto contours{cext.extract(median)}; },
             100,
             "contour",
-            true);
+            false);
+
+  mrl::matrix<cpl::nat_cc> recovered{screen_width, screen_height};
+
+  auto contours{cext.extract(median)};
+  for (auto const& contour : contours) {
+    contour.recover(recovered.data(), std::true_type{});
+  }
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
   for (auto& region : grid.regions()) {
@@ -110,10 +117,13 @@ int main() {
   auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_c =
+      recovered.map([](auto c) noexcept { return native_to_blend(c); });
 
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
   png::write(ddir / "diff.png", screen_width, screen_height, rgb_d.data());
+  png::write(ddir / "contours.png", screen_width, screen_height, rgb_c.data());
 
   return 0;
 }

@@ -6,13 +6,12 @@
 #include "mrl.hpp"
 
 #include <deque>
+#include <optional>
 #include <queue>
 #include <vector>
 
 namespace cte {
 namespace v1 {
-  namespace details {} // namespace details
-
   inline constexpr std::uint32_t horizon_id{0xffffff};
 
   class edge {
@@ -30,21 +29,111 @@ namespace v1 {
       return (rep_ & 1) != 0;
     }
 
+    friend auto operator<=>(edge, edge) = default;
+
   private:
     std::uint32_t rep_;
   };
+
+  namespace details {
+    struct limits {
+      inline limits() noexcept
+          : lower_{std::numeric_limits<std::size_t>::max()}
+          , upper_{0} {
+      }
+
+      inline void update(std::size_t value) noexcept {
+        if (value > upper_) {
+          upper_ = value;
+        }
+        else if (value < lower_) {
+          lower_ = value;
+        }
+      }
+
+      [[nodiscard]] std::size_t size() const noexcept {
+        return upper_ - lower_;
+      }
+
+      std::size_t lower_;
+      std::size_t upper_;
+    };
+  } // namespace details
+
+  class box {
+  public:
+    const box(details::limits const& horizontal,
+              details::limits const& vertical) noexcept
+        : horizontal_(horizontal)
+        , vertical_(vertical) {
+    }
+
+    [[nodiscard]] std::size_t left() const noexcept {
+      return horizontal_.lower_;
+    }
+
+    [[nodiscard]] std::size_t right() const noexcept {
+      return horizontal_.upper_;
+    }
+
+    [[nodiscard]] std::size_t width() const noexcept {
+      return horizontal_.size();
+    }
+
+    [[nodiscard]] std::size_t top() const noexcept {
+      return vertical_.lower_;
+    }
+
+    [[nodiscard]] std::size_t bottom() const noexcept {
+      return vertical_.upper_;
+    }
+
+    [[nodiscard]] std::size_t height() const noexcept {
+      return vertical_.size();
+    }
+
+  private:
+    details::limits horizontal_;
+    details::limits vertical_;
+  };
+
+  namespace details {
+    template<typename Edges>
+    [[nodiscard]] box get_enclosure(Edges const& edges,
+                                    std::size_t width) noexcept {
+      limits horizontal, vertical;
+
+      for (auto edge : edges) {
+        auto index{edge.position()};
+        horizontal.update(index % width);
+        vertical.update(index % width);
+      }
+
+      return {horizontal, vertical};
+    }
+
+    inline void set_pixels(cpl::nat_cc* output,
+                           std::uint32_t left,
+                           std::uint32_t right,
+                           cpl::nat_cc color) noexcept {
+      std::memset(output + left, color.value, right - left + 1);
+    }
+  } // namespace details
 
   template<typename Alloc = std::allocator<edge>>
   class contour {
   public:
     using allocator_type = Alloc;
+    using edges_t = std::vector<edge, allocator_type>;
 
   public:
     inline contour(cpl::nat_cc const* base,
+                   std::size_t width,
                    std::uint32_t id,
                    allocator_type const& allocator) noexcept
         : edges_{allocator}
         , base_{base}
+        , width_{width}
         , id_{id} {
     }
 
@@ -57,6 +146,36 @@ namespace v1 {
       }
     }
 
+    void recover(cpl::nat_cc* output,
+                 std::true_type /*unused*/) const noexcept {
+      sort();
+      auto c{color()};
+
+      std::optional<std::uint32_t> left;
+      for (auto edge : edges_) {
+        if (edge.is_right()) {
+          if (left) {
+            details::set_pixels(output, left.value(), edge.position(), c);
+            left.reset();
+          }
+          else {
+            output[edge.position()] = c;
+          }
+        }
+        else {
+          left = edge.position();
+        }
+      }
+    }
+
+    void recover(cpl::nat_cc* output,
+                 std::false_type /*unused*/) const noexcept {
+      auto c{color()};
+      for (auto edge : edges_) {
+        output[edge.position()] = c;
+      }
+    }
+
     [[nodiscard]] inline std::uint32_t area() const noexcept {
       return area_;
     }
@@ -65,12 +184,43 @@ namespace v1 {
       return id_;
     }
 
+    [[nodiscard]] inline box const& enclosure() const noexcept {
+      if (!enclosure_) {
+        sort();
+        enclosure_ = get_enclosure(edges_, width_);
+      }
+
+      return enclosure_;
+    }
+
+    [[nodiscard]] inline cpl::nat_cc color() const noexcept {
+      if (!color_) {
+        color_ = base_[edges_.front().position()];
+      }
+
+      return *color_;
+    }
+
   private:
-    std::vector<edge, allocator_type> edges_;
+    inline void sort() const noexcept {
+      if (!sorted_) {
+        std::sort(edges_.begin(), edges_.end());
+        sorted_ = true;
+      }
+    }
+
+  private:
+    mutable bool sorted_{};
+    mutable edges_t edges_;
+
     cpl::nat_cc const* base_;
+    std::size_t width_;
 
     std::uint32_t area_{0};
     std::uint32_t id_;
+
+    mutable std::optional<box> enclosure_;
+    mutable std::optional<cpl::nat_cc> color_;
   };
 
   template<typename Alloc = std::allocator<edge>>
@@ -137,10 +287,10 @@ namespace v1 {
     [[nodiscard]] contour_type extract_single(cpl::nat_cc const* image,
                                               cpl::nat_cc const* position,
                                               std::uint32_t id) {
-      contour_type result{image, id, allocator_};
-
       auto width{walk_.width()};
       auto walk{walk_.data()};
+
+      contour_type result{image, width, id, allocator_};
 
       path_.push(position);
       while (!path_.empty()) {
