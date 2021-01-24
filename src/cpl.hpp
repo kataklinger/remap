@@ -10,7 +10,7 @@
 
 namespace cpl {
 template<typename Ty>
-concept pixel_color = std::is_integral_v<Ty> || std::is_floating_point_v<Ty>;
+concept pixel_color = (std::is_integral_v<Ty> || std::is_floating_point_v<Ty>);
 
 struct rgb_component_color_t {};
 struct rgb_blended_color_t {};
@@ -25,6 +25,11 @@ struct color_t {
   Ty value;
   friend auto operator<=>(color_t const&, color_t const&) = default;
 };
+
+template<pixel_color Ty, typename Tag>
+Ty value(color_t<Ty, Tag> const& color) {
+  return color.value;
+}
 
 using rgb_cc = color_t<std::uint8_t, rgb_component_color_t>;
 using rgb_bc = color_t<std::uint32_t, rgb_blended_color_t>;

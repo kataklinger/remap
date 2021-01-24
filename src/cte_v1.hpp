@@ -102,6 +102,13 @@ namespace v1 {
     details::limits vertical_;
   };
 
+  template<typename Ty>
+  concept pixel = requires(Ty v) {
+    requires std::is_trivially_constructible_v<Ty>;
+    requires std::totally_ordered<Ty>;
+    requires cpl::pixel_color<decltype(value(v))>;
+  };
+
   namespace details {
     template<typename Edges>
     [[nodiscard]] box get_enclosure(Edges const& edges,
@@ -116,22 +123,26 @@ namespace v1 {
           {edges.front().position() / width, edges.back().position() / width}};
     }
 
-    inline void set_pixels(cpl::nat_cc* output,
+    template<pixel Ty>
+    inline void set_pixels(Ty* output,
                            std::uint32_t left,
                            std::uint32_t right,
-                           cpl::nat_cc color) noexcept {
-      std::memset(output + left, color.value, right - left + 1);
+                           Ty color) noexcept {
+      std::memset(output + left,
+                  value(color),
+                  static_cast<std::size_t>(right - left) + 1);
     }
   } // namespace details
 
-  template<typename Alloc = std::allocator<edge>>
+  template<pixel Ty, typename Alloc = std::allocator<edge>>
   class contour {
   public:
+    using pixel_type = Ty;
     using allocator_type = Alloc;
     using edges_t = std::vector<edge, allocator_type>;
 
   public:
-    inline contour(cpl::nat_cc const* base,
+    inline contour(pixel_type const* base,
                    std::size_t width,
                    std::uint32_t id,
                    allocator_type const& allocator) noexcept
@@ -142,7 +153,7 @@ namespace v1 {
     }
 
     inline void
-        add_point(cpl::nat_cc const* point, bool left_edge, bool right_edge) {
+        add_point(pixel_type const* point, bool left_edge, bool right_edge) {
       ++area_;
 
       if (left_edge || right_edge) {
@@ -150,8 +161,7 @@ namespace v1 {
       }
     }
 
-    void recover(cpl::nat_cc* output,
-                 std::true_type /*unused*/) const noexcept {
+    void recover(pixel_type* output, std::true_type /*unused*/) const noexcept {
       sort();
       auto c{color()};
 
@@ -172,7 +182,7 @@ namespace v1 {
       }
     }
 
-    void recover(cpl::nat_cc* output,
+    void recover(pixel_type* output,
                  std::false_type /*unused*/) const noexcept {
       auto c{color()};
       for (auto edge : edges_) {
@@ -197,7 +207,7 @@ namespace v1 {
       return *enclosure_;
     }
 
-    [[nodiscard]] inline cpl::nat_cc color() const noexcept {
+    [[nodiscard]] inline pixel_type color() const noexcept {
       if (!color_) {
         color_ = base_[edges_.front().position()];
       }
@@ -217,21 +227,22 @@ namespace v1 {
     mutable bool sorted_{};
     mutable edges_t edges_;
 
-    cpl::nat_cc const* base_;
+    pixel_type const* base_;
     std::size_t width_;
 
     std::uint32_t area_{0};
     std::uint32_t id_;
 
     mutable std::optional<box> enclosure_;
-    mutable std::optional<cpl::nat_cc> color_;
+    mutable std::optional<pixel_type> color_;
   };
 
-  template<typename Alloc = std::allocator<edge>>
+  template<pixel Ty, typename Alloc = std::allocator<edge>>
   class extractor {
   public:
+    using pixel_type = Ty;
     using allocator_type = Alloc;
-    using contour_type = contour<allocator_type>;
+    using contour_type = contour<pixel_type, allocator_type>;
 
     using contours =
         std::vector<contour_type,
@@ -243,7 +254,7 @@ namespace v1 {
       std::uint32_t edge_ : 1;
     };
 
-    using path_node = cpl::nat_cc const*;
+    using path_node = pixel_type const*;
     using path_containter =
         std::deque<path_node, all::rebind_alloc_t<allocator_type, path_node>>;
     using path_type = std::queue<path_node, path_containter>;
@@ -258,7 +269,7 @@ namespace v1 {
     }
 
   public:
-    [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& image) {
+    [[nodiscard]] contours extract(mrl::matrix<pixel_type> const& image) {
       clear_walk();
 
       contours extracted{allocator_};
@@ -274,8 +285,8 @@ namespace v1 {
     }
 
   private:
-    inline void process_row(cpl::nat_cc const* image,
-                            cpl::nat_cc const* position,
+    inline void process_row(pixel_type const* image,
+                            pixel_type const* position,
                             contours& output) {
       std::uint32_t id{0};
       auto walk{walk_.data()};
@@ -288,8 +299,8 @@ namespace v1 {
       }
     }
 
-    [[nodiscard]] contour_type extract_single(cpl::nat_cc const* image,
-                                              cpl::nat_cc const* position,
+    [[nodiscard]] contour_type extract_single(pixel_type const* image,
+                                              pixel_type const* position,
                                               std::uint32_t id) {
       auto width{walk_.width()};
       auto walk{walk_.data()};
@@ -315,7 +326,7 @@ namespace v1 {
       return result;
     }
 
-    bool push_pixel(cpl::nat_cc const* pixel,
+    bool push_pixel(pixel_type const* pixel,
                     state* cell,
                     std::uint32_t id,
                     std::ptrdiff_t offset) {

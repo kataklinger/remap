@@ -88,8 +88,8 @@ int main() {
       "match",
       false);
 
-  cte::v1::extractor<>::allocator_type alloc{};
-  cte::v1::extractor<> cext{screen_width, screen_height, alloc};
+  cte::v1::extractor<cpl::nat_cc>::allocator_type alloc{};
+  cte::v1::extractor<cpl::nat_cc> cext{screen_width, screen_height, alloc};
 
   perf_test([&cext, &median]() { auto contours{cext.extract(median)}; },
             100,
