@@ -42,6 +42,11 @@ namespace v1 {
           , upper_{0} {
       }
 
+      inline limits(std::size_t lower, std::size_t upper) noexcept
+          : lower_{lower}
+          , upper_{upper} {
+      }
+
       inline void update(std::size_t value) noexcept {
         if (value > upper_) {
           upper_ = value;
@@ -101,15 +106,14 @@ namespace v1 {
     template<typename Edges>
     [[nodiscard]] box get_enclosure(Edges const& edges,
                                     std::size_t width) noexcept {
-      limits horizontal, vertical;
-
+      limits horizontal;
       for (auto edge : edges) {
-        auto index{edge.position()};
-        horizontal.update(index % width);
-        vertical.update(index % width);
+        horizontal.update(edge.position() % width);
       }
 
-      return {horizontal, vertical};
+      return {
+          horizontal,
+          {edges.front().position() / width, edges.back().position() / width}};
     }
 
     inline void set_pixels(cpl::nat_cc* output,
@@ -187,10 +191,10 @@ namespace v1 {
     [[nodiscard]] inline box const& enclosure() const noexcept {
       if (!enclosure_) {
         sort();
-        enclosure_ = get_enclosure(edges_, width_);
+        enclosure_ = details::get_enclosure(edges_, width_);
       }
 
-      return enclosure_;
+      return *enclosure_;
     }
 
     [[nodiscard]] inline cpl::nat_cc color() const noexcept {
