@@ -12,7 +12,7 @@
 
 namespace cte {
 namespace v1 {
-  inline constexpr std::uint32_t horizon_id{0xffffff};
+  inline constexpr std::uint16_t horizon_id{0xffff};
 
   class edge {
   public:
@@ -250,8 +250,9 @@ namespace v1 {
 
   private:
     struct state {
-      std::uint32_t id_ : 24;
-      std::uint32_t edge_ : 1;
+      std::uint16_t id_;
+      pixel_type color_;
+      bool edge_;
     };
 
     using path_node = pixel_type const*;
@@ -312,11 +313,15 @@ namespace v1 {
         auto pixel{path_.front()};
         auto cell{walk + (pixel - image)};
 
-        push_pixel(pixel, cell, id, -width);
-        push_pixel(pixel, cell, id, +width);
+        auto top{push_pixel(pixel, cell, id, -width)};
+        auto bottom{push_pixel(pixel, cell, id, +width)};
 
         auto left{push_pixel(pixel, cell, id, -1)};
         auto right{push_pixel(pixel, cell, id, +1)};
+
+        cell->color_ = *pixel;
+        cell->edge_ =
+            static_cast<std::uint32_t>(top || bottom || left || right);
 
         result.add_point(pixel, left, right);
 
