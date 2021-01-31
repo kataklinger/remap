@@ -2,259 +2,40 @@
 #pragma once
 
 #include "all.hpp"
-#include "cpl.hpp"
+#include "ctr.hpp"
 #include "mrl.hpp"
 
 #include <deque>
-#include <optional>
 #include <queue>
-#include <vector>
 
 namespace cte {
 namespace v1 {
   inline constexpr std::uint16_t horizon_id{0xffff};
 
-  class edge {
-  public:
-    inline edge(std::ptrdiff_t position, bool is_right) noexcept
-        : rep_{static_cast<std::uint32_t>(position << 1) |
-               static_cast<std::uint32_t>(is_right)} {
-    }
-
-    [[nodiscard]] inline std::uint32_t position() const noexcept {
-      return rep_ >> 1;
-    }
-
-    [[nodiscard]] inline bool is_right() const noexcept {
-      return (rep_ & 1) != 0;
-    }
-
-    friend auto operator<=>(edge, edge) = default;
-
-  private:
-    std::uint32_t rep_;
-  };
-
-  namespace details {
-    struct limits {
-      inline limits() noexcept
-          : lower_{std::numeric_limits<std::size_t>::max()}
-          , upper_{0} {
-      }
-
-      inline limits(std::size_t lower, std::size_t upper) noexcept
-          : lower_{lower}
-          , upper_{upper} {
-      }
-
-      inline void update(std::size_t value) noexcept {
-        if (value > upper_) {
-          upper_ = value;
-        }
-        else if (value < lower_) {
-          lower_ = value;
-        }
-      }
-
-      [[nodiscard]] std::size_t size() const noexcept {
-        return upper_ - lower_;
-      }
-
-      std::size_t lower_;
-      std::size_t upper_;
-    };
-  } // namespace details
-
-  class box {
-  public:
-    const box(details::limits const& horizontal,
-              details::limits const& vertical) noexcept
-        : horizontal_(horizontal)
-        , vertical_(vertical) {
-    }
-
-    [[nodiscard]] std::size_t left() const noexcept {
-      return horizontal_.lower_;
-    }
-
-    [[nodiscard]] std::size_t right() const noexcept {
-      return horizontal_.upper_;
-    }
-
-    [[nodiscard]] std::size_t width() const noexcept {
-      return horizontal_.size();
-    }
-
-    [[nodiscard]] std::size_t top() const noexcept {
-      return vertical_.lower_;
-    }
-
-    [[nodiscard]] std::size_t bottom() const noexcept {
-      return vertical_.upper_;
-    }
-
-    [[nodiscard]] std::size_t height() const noexcept {
-      return vertical_.size();
-    }
-
-  private:
-    details::limits horizontal_;
-    details::limits vertical_;
-  };
-
-  template<typename Ty>
-  concept pixel = requires(Ty v) {
-    requires std::is_trivially_constructible_v<Ty>;
-    requires std::totally_ordered<Ty>;
-    requires cpl::pixel_color<decltype(value(v))>;
-  };
-
-  namespace details {
-    template<typename Edges>
-    [[nodiscard]] box get_enclosure(Edges const& edges,
-                                    std::size_t width) noexcept {
-      limits horizontal;
-      for (auto edge : edges) {
-        horizontal.update(edge.position() % width);
-      }
-
-      return {
-          horizontal,
-          {edges.front().position() / width, edges.back().position() / width}};
-    }
-
-    template<pixel Ty>
-    inline void set_pixels(Ty* output,
-                           std::uint32_t left,
-                           std::uint32_t right,
-                           Ty color) noexcept {
-      std::memset(output + left,
-                  value(color),
-                  static_cast<std::size_t>(right - left) + 1);
-    }
-  } // namespace details
-
-  template<pixel Ty, typename Alloc = std::allocator<edge>>
-  class contour {
-  public:
+  template<ctr::pixel Ty>
+  struct cell {
     using pixel_type = Ty;
-    using allocator_type = Alloc;
-    using edges_t = std::vector<edge, allocator_type>;
 
-  public:
-    inline contour(pixel_type const* base,
-                   std::size_t width,
-                   std::uint32_t id,
-                   allocator_type const& allocator) noexcept
-        : edges_{allocator}
-        , base_{base}
-        , width_{width}
-        , id_{id} {
-    }
-
-    inline void
-        add_point(pixel_type const* point, bool left_edge, bool right_edge) {
-      ++area_;
-
-      if (left_edge || right_edge) {
-        edges_.push_back({point - base_, right_edge});
-      }
-    }
-
-    void recover(pixel_type* output, std::true_type /*unused*/) const noexcept {
-      sort();
-      auto c{color()};
-
-      std::optional<std::uint32_t> left;
-      for (auto edge : edges_) {
-        if (edge.is_right()) {
-          if (left) {
-            details::set_pixels(output, left.value(), edge.position(), c);
-            left.reset();
-          }
-          else {
-            output[edge.position()] = c;
-          }
-        }
-        else {
-          left = edge.position();
-        }
-      }
-    }
-
-    void recover(pixel_type* output,
-                 std::false_type /*unused*/) const noexcept {
-      auto c{color()};
-      for (auto edge : edges_) {
-        output[edge.position()] = c;
-      }
-    }
-
-    [[nodiscard]] inline std::uint32_t area() const noexcept {
-      return area_;
-    }
-
-    [[nodiscard]] inline std::uint32_t id() const noexcept {
-      return id_;
-    }
-
-    [[nodiscard]] inline box const& enclosure() const noexcept {
-      if (!enclosure_) {
-        sort();
-        enclosure_ = details::get_enclosure(edges_, width_);
-      }
-
-      return *enclosure_;
-    }
-
-    [[nodiscard]] inline pixel_type color() const noexcept {
-      if (!color_) {
-        color_ = base_[edges_.front().position()];
-      }
-
-      return *color_;
-    }
-
-  private:
-    inline void sort() const noexcept {
-      if (!sorted_) {
-        std::sort(edges_.begin(), edges_.end());
-        sorted_ = true;
-      }
-    }
-
-  private:
-    mutable bool sorted_{};
-    mutable edges_t edges_;
-
-    pixel_type const* base_;
-    std::size_t width_;
-
-    std::uint32_t area_{0};
-    std::uint32_t id_;
-
-    mutable std::optional<box> enclosure_;
-    mutable std::optional<pixel_type> color_;
+    std::uint16_t id_;
+    pixel_type color_;
+    bool edge_;
   };
 
-  template<pixel Ty, typename Alloc = std::allocator<edge>>
+  template<ctr::pixel Ty, typename Alloc = std::allocator<ctr::edge>>
   class extractor {
   public:
     using pixel_type = Ty;
     using allocator_type = Alloc;
-    using contour_type = contour<pixel_type, allocator_type>;
+    using contour_type = ctr::contour<pixel_type, allocator_type>;
 
     using contours =
         std::vector<contour_type,
                     all::rebind_alloc_t<allocator_type, contour_type>>;
 
-  private:
-    struct state {
-      std::uint16_t id_;
-      pixel_type color_;
-      bool edge_;
-    };
+    using cell_type = cell<pixel_type>;
+    static_assert(std::is_trivially_copyable_v<cell_type>);
 
+  private:
     using path_node = pixel_type const*;
     using path_containter =
         std::deque<path_node, all::rebind_alloc_t<allocator_type, path_node>>;
@@ -265,13 +46,13 @@ namespace v1 {
                      mrl::size_type height,
                      allocator_type const& allocator)
         : allocator_{allocator}
-        , walk_{width, height}
+        , outline_{width, height}
         , path_{path_containter{allocator}} {
     }
 
   public:
     [[nodiscard]] contours extract(mrl::matrix<pixel_type> const& image) {
-      clear_walk();
+      clear_outline();
 
       contours extracted{allocator_};
       for (auto position{image.data() + image.width() + 1},
@@ -285,16 +66,20 @@ namespace v1 {
       return extracted;
     }
 
+    [[nodiscard]] mrl::matrix<cell_type> const& outline() const noexcept {
+      return outline_;
+    }
+
   private:
     inline void process_row(pixel_type const* image,
                             pixel_type const* position,
                             contours& output) {
       std::uint32_t id{0};
-      auto walk{walk_.data()};
+      auto outline{outline_.data()};
 
-      for (auto last{position + walk_.width() - 2}; position < last;
+      for (auto last{position + outline_.width() - 2}; position < last;
            ++position) {
-        if (walk[position - image].id_ == 0) {
+        if (outline[position - image].id_ == 0) {
           output.push_back(extract_single(image, position, ++id));
         }
       }
@@ -303,15 +88,15 @@ namespace v1 {
     [[nodiscard]] contour_type extract_single(pixel_type const* image,
                                               pixel_type const* position,
                                               std::uint32_t id) {
-      auto width{walk_.width()};
-      auto walk{walk_.data()};
+      auto width{outline_.width()};
+      auto outline{outline_.data()};
 
       contour_type result{image, width, id, allocator_};
 
       path_.push(position);
       while (!path_.empty()) {
         auto pixel{path_.front()};
-        auto cell{walk + (pixel - image)};
+        auto cell{outline + (pixel - image)};
 
         auto top{push_pixel(pixel, cell, id, -width)};
         auto bottom{push_pixel(pixel, cell, id, +width)};
@@ -332,7 +117,7 @@ namespace v1 {
     }
 
     bool push_pixel(pixel_type const* pixel,
-                    state* cell,
+                    cell_type* cell,
                     std::uint32_t id,
                     std::ptrdiff_t offset) {
       if (auto n_pixel{pixel + offset}; *n_pixel == *pixel) {
@@ -348,21 +133,22 @@ namespace v1 {
       return true;
     }
 
-    void clear_walk() noexcept {
-      auto first{walk_.data()};
-      for (auto last{walk_.data() + walk_.width()}; first < last; ++first) {
+    void clear_outline() noexcept {
+      auto first{outline_.data()};
+      for (auto last{outline_.data() + outline_.width()}; first < last;
+           ++first) {
         *first = {.id_ = horizon_id};
       }
 
-      auto size{(walk_.width() - 2) * walk_.height()};
-      std::memset(first, 0, size * sizeof(state));
+      auto size{(outline_.width() - 2) * outline_.height()};
+      std::memset(first, 0, size * sizeof(cell_type));
 
-      for (auto last{first + size - walk_.width()}; first <= last;
-           first += walk_.width()) {
-        *first = *(first + walk_.width() - 1) = {.id_ = horizon_id};
+      for (auto last{first + size - outline_.width()}; first <= last;
+           first += outline_.width()) {
+        *first = *(first + outline_.width() - 1) = {.id_ = horizon_id};
       }
 
-      for (auto last{walk_.end()}; first < last; ++first) {
+      for (auto last{outline_.end()}; first < last; ++first) {
         *first = {.id_ = horizon_id};
       }
     }
@@ -370,7 +156,7 @@ namespace v1 {
   private:
     [[no_unique_address]] allocator_type allocator_;
 
-    mrl::matrix<state> walk_;
+    mrl::matrix<cell_type> outline_;
     path_type path_;
   };
 } // namespace v1
