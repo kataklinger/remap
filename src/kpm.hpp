@@ -2,6 +2,7 @@
 #pragma once
 
 #include "all.hpp"
+#include "cdt.hpp"
 #include "kpr.hpp"
 
 #include <algorithm>
@@ -13,22 +14,6 @@
 #include <vector>
 
 namespace kpm {
-using offset = std::tuple<std::int32_t, std::int32_t>;
-
-struct offset_hash {
-  [[nodiscard]] std::size_t operator()(offset const& off) const noexcept {
-    std::size_t hashed = 2166136261U;
-
-    hashed ^= static_cast<std::size_t>(std::get<0>(off));
-    hashed *= 16777619U;
-
-    hashed ^= static_cast<std::size_t>(std::get<1>(off));
-    hashed *= 16777619U;
-
-    return hashed;
-  }
-};
-
 template<typename Ty>
 concept match_config = requires(Ty cfg) {
   requires std::unsigned_integral<decltype(Ty::weight_switch)>;
@@ -48,13 +33,13 @@ namespace details {
 
   template<match_config Cfg>
   using totalizator_t = std::unordered_map<
-      offset,
+      cdt::offset_t,
       std::size_t,
-      offset_hash,
-      std::equal_to<offset>,
-      get_allocator<Cfg, std::pair<const offset, std::size_t>>>;
+      cdt::offset_hash,
+      std::equal_to<cdt::offset_t>,
+      get_allocator<Cfg, std::pair<const cdt::offset_t, std::size_t>>>;
 
-  using vote_t = std::tuple<offset, std::size_t>;
+  using vote_t = std::tuple<cdt::offset_t, std::size_t>;
 
   template<match_config Cfg>
   using ticket_t = std::vector<vote_t, get_allocator<Cfg, vote_t>>;
@@ -69,7 +54,7 @@ namespace details {
                    Total& total) {
     for (auto& [px, py] : previous) {
       for (auto& [cx, cy] : current) {
-        offset off{
+        cdt::offset_t off{
             static_cast<std::int32_t>(px) - static_cast<std::int32_t>(cx),
             static_cast<std::int32_t>(py) - static_cast<std::int32_t>(cy)};
 
@@ -169,8 +154,8 @@ namespace details {
   }
 
   template<match_config Cfg>
-  [[nodiscard]] std::optional<offset> declare(ticket_t<Cfg> const& top,
-                                              std::size_t region_count) {
+  [[nodiscard]] std::optional<cdt::offset_t> declare(ticket_t<Cfg> const& top,
+                                                     std::size_t region_count) {
     if (top.empty()) {
       return {};
     }
@@ -186,7 +171,7 @@ namespace details {
 } // namespace details
 
 template<match_config Cfg, std::size_t Width, std::size_t Height>
-[[nodiscard]] std::optional<offset>
+[[nodiscard]] std::optional<cdt::offset_t>
     match(Cfg& config,
           kpr::grid<Width, Height> const& previous,
           kpr::grid<Width, Height> const& current) {

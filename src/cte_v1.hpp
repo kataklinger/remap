@@ -21,6 +21,9 @@ namespace v1 {
     bool edge_;
   };
 
+  template<ctr::pixel Ty>
+  using outline_t = mrl::matrix<cell<Ty>>;
+
   template<ctr::pixel Ty, typename Alloc = std::allocator<ctr::edge>>
   class extractor {
   public:
@@ -34,6 +37,8 @@ namespace v1 {
 
     using cell_type = cell<pixel_type>;
     static_assert(std::is_trivially_copyable_v<cell_type>);
+
+    using outline_type = outline_t<pixel_type>;
 
   private:
     using path_node = pixel_type const*;
@@ -66,7 +71,7 @@ namespace v1 {
       return extracted;
     }
 
-    [[nodiscard]] mrl::matrix<cell_type> const& outline() const noexcept {
+    [[nodiscard]] outline_type const& outline() const noexcept {
       return outline_;
     }
 
@@ -156,7 +161,7 @@ namespace v1 {
   private:
     [[no_unique_address]] allocator_type allocator_;
 
-    mrl::matrix<cell_type> outline_;
+    outline_type outline_;
     path_type path_;
   };
 } // namespace v1

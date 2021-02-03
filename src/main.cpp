@@ -2,6 +2,7 @@
 #include "cte_v1.hpp"
 #include "kpe_v1.hpp"
 #include "kpm.hpp"
+#include "mod.hpp"
 #include "pngu.hpp"
 
 #include <chrono>
@@ -102,6 +103,8 @@ int main() {
   for (auto const& contour : contours) {
     contour.recover(recovered.data(), std::true_type{});
   }
+
+  mod::detect(cext.outline(), cext.outline(), {});
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
   for (auto& region : grid.regions()) {
