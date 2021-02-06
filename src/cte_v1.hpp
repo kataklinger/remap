@@ -15,8 +15,9 @@ namespace v1 {
   template<ctr::pixel Ty>
   struct cell {
     using pixel_type = Ty;
+    using id_type = std::uint16_t;
 
-    std::uint16_t id_;
+    id_type id_;
     pixel_type color_;
     bool edge_;
   };
