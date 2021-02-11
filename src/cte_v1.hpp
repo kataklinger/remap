@@ -80,13 +80,15 @@ namespace v1 {
     inline void process_row(pixel_type const* image,
                             pixel_type const* position,
                             contours& output) {
-      std::uint32_t id{0};
       auto outline{outline_.data()};
 
       for (auto last{position + outline_.width() - 2}; position < last;
            ++position) {
         if (outline[position - image].id_ == 0) {
-          output.push_back(extract_single(image, position, ++id));
+          output.push_back(extract_single(
+              image,
+              position,
+              static_cast<typename cell_type::id_type>(output.size() + 1)));
         }
       }
     }
@@ -100,6 +102,8 @@ namespace v1 {
       contour_type result{image, width, id, allocator_};
 
       path_.push(position);
+      outline[(position - image)].id_ = id;
+
       while (!path_.empty()) {
         auto pixel{path_.front()};
         auto cell{outline + (pixel - image)};
