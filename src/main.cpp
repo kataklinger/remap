@@ -104,7 +104,8 @@ int main() {
     contour.recover(recovered.data(), std::true_type{});
   }
 
-  mod::detect(cext.outline(), cext.outline(), {});
+  mod::detector<cpl::nat_cc> motion{1, 11};
+  motion.detect(cext.outline(), cext.outline(), {}, contours);
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
   for (auto& region : grid.regions()) {
@@ -123,10 +124,17 @@ int main() {
   auto rgb_c =
       recovered.map([](auto c) noexcept { return native_to_blend(c); });
 
+  auto ctr_o = cext.outline().map([](auto& c) noexcept {
+    return cpl::intensity_to_blend(
+        c.id_ == cte::v1::horizon_id ? cpl::grs_iv{0.f} : cpl::grs_iv{1.f});
+  });
+
   png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
   png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
   png::write(ddir / "diff.png", screen_width, screen_height, rgb_d.data());
   png::write(ddir / "contours.png", screen_width, screen_height, rgb_c.data());
+
+  png::write(ddir / "xxxx.png", screen_width, screen_height, ctr_o.data());
 
   return 0;
 }
