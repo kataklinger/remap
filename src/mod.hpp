@@ -19,14 +19,16 @@ private:
   using source_t = cte::v1::outline_t<pixel_type>;
   using cell_t = typename source_t::value_type;
 
+public:
   using contour_id = typename cell_t::id_type;
+  using motion_t = std::tuple<contour_id, std::int32_t>;
+
+private:
   using contour_type =
       ctr::contour<pixel_type, all::rebind_alloc_t<allocator_type, ctr::edge>>;
   using contours_type =
       std::vector<contour_type,
                   all::rebind_alloc_t<allocator_type, contour_type>>;
-
-  using motion_t = std::tuple<contour_id, std::int32_t>;
 
   using markings =
       std::vector<std::uint8_t,
@@ -53,17 +55,23 @@ private:
   using motion_tracker_t =
       std::unordered_map<contour_id, motion_counter_t, std::hash<contour_id>>;
 
+  using motion_vector =
+      std::vector<motion_t, all::rebind_alloc_t<allocator_type, motion_t>>;
+
 public:
-  detector(std::uint8_t margin, std::uint8_t window)
+  detector(std::uint8_t margin,
+           std::uint8_t window,
+           allocator_type const& alloc = allocator_type{})
       : margin_{margin}
       , window_{window}
-      , half_{static_cast<std::uint8_t>(window >> 1)} {
+      , half_{static_cast<std::uint8_t>(window >> 1)}
+      , tracker_{alloc} {
   }
 
-  void detect(source_t const& previous,
-              source_t const& current,
-              cdt::offset_t adjustment,
-              contours_type const& contours) {
+  motion_vector detect(source_t const& previous,
+                       source_t const& current,
+                       cdt::offset_t adjustment,
+                       contours_type const& contours) {
     auto width{current.width()};
 
     auto [x, y]{adjustment};
@@ -103,6 +111,8 @@ public:
                   width,
                   marked);
     }
+
+    return refine_motion_data();
   }
 
 private:
@@ -112,10 +122,10 @@ private:
                                      std::size_t width,
                                      std::size_t window,
                                      std::size_t count) const {
-    markings marked(count);
+    markings marked{count, tracker_.get_allocator()};
 
     for (; current < end; current += width, previous += width) {
-      for (auto c{current}, e{current + width}, p{previous}; c < e; ++c, ++p) {
+      for (auto c{current}, e{current + window}, p{previous}; c < e; ++c, ++p) {
         if (c->color_ != p->color_ || c->edge_ != p->edge_) {
           marked[c->id_ - 1] = 1;
         }
@@ -186,8 +196,25 @@ private:
     }
   }
 
-  [[nodiscard]] inline std::size_t clip(std::size_t edge) const noexcept {
-    return std::max(edge, 0ULL) + margin_;
+  [[nodiscard]] inline std::size_t clip(std::int32_t edge) const noexcept {
+    return static_cast<std::size_t>(std::max(edge, 0)) + margin_;
+  }
+
+  motion_vector refine_motion_data() const {
+    motion_vector motions{tracker_.size(), tracker_.get_allocator()};
+
+    for (auto& [id, offsets] : tracker_) {
+      auto [candidate, _] = *std::max_element(
+          offsets.begin(), offsets.end(), [](auto& lhs, auto& rhs) {
+            return lhs.second < rhs.second;
+          });
+
+      if (auto motion{std::get<1>(candidate)}; motion != 0) {
+        motions.push_back({id, motion});
+      }
+    }
+
+    return motions;
   }
 
 private:

@@ -51,90 +51,103 @@ struct match_config {
   }
 };
 
-int main() {
-  std::filesystem::path ddir{"../../../data/"};
+std::filesystem::path const ddir{"../../../data/"};
+
+void read_raw(std::string filename, mrl::matrix<cpl::nat_cc>& output) {
 
   std::ifstream input;
 
-  input.open(ddir / "raw", std::ios::in | std::ios::binary);
+  input.open(ddir / filename, std::ios::in | std::ios::binary);
   if (!input.is_open()) {
-    return 0;
+    return;
   }
 
-  mrl::matrix<cpl::nat_cc> image{screen_width, screen_height};
-  mrl::matrix<cpl::nat_cc> median{screen_width, screen_height};
-
-  input.read(reinterpret_cast<char*>(image.data()),
-             screen_width * screen_height);
+  input.read(reinterpret_cast<char*>(output.data()),
+             output.width() * output.height());
   input.close();
+}
 
-  extractor_t extractor{screen_width, screen_height};
+int main() {
+  mrl::matrix<cpl::nat_cc> image1{screen_width, screen_height};
+  mrl::matrix<cpl::nat_cc> image2{screen_width, screen_height};
+
+  read_raw("raw1", image1);
+  read_raw("raw2", image2);
+
+  extractor_t extractor1{screen_width, screen_height};
+  extractor_t extractor2{screen_width, screen_height};
+
+  mrl::matrix<cpl::nat_cc> median1{screen_width, screen_height};
+  mrl::matrix<cpl::nat_cc> median2{screen_width, screen_height};
 
   perf_test(
-      [&image, &median, &extractor] {
-        [[maybe_unused]] auto grid{extractor.extract(image, median)};
+      [&image1, &median1, &extractor1] {
+        [[maybe_unused]] auto grid{extractor1.extract(image1, median1)};
       },
       100,
       "median",
       false);
 
-  auto grid{extractor.extract(image, median)};
+  auto grid1{extractor1.extract(image1, median1)};
+  auto grid2{extractor2.extract(image2, median2)};
 
   match_config cfg;
+  auto offset{kpm::match(cfg, grid1, grid2)};
+
   perf_test(
-      [&cfg, &grid]() {
-        [[maybe_unused]] auto result{kpm::match(cfg, grid, grid)};
+      [&cfg, &grid1, &grid2]() {
+        [[maybe_unused]] auto result{kpm::match(cfg, grid1, grid2)};
       },
       100,
       "match",
       false);
 
   cte::v1::extractor<cpl::nat_cc>::allocator_type alloc{};
-  cte::v1::extractor<cpl::nat_cc> cext{screen_width, screen_height, alloc};
+  cte::v1::extractor<cpl::nat_cc> cext1{screen_width, screen_height, alloc};
+  cte::v1::extractor<cpl::nat_cc> cext2{screen_width, screen_height, alloc};
 
-  perf_test([&cext, &median]() { auto contours{cext.extract(median)}; },
+  perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
             100,
             "contour",
             false);
 
   mrl::matrix<cpl::nat_cc> recovered{screen_width, screen_height};
 
-  auto contours{cext.extract(median)};
-  for (auto const& contour : contours) {
+  auto contours1{cext1.extract(median1)};
+  auto contours2{cext2.extract(median2)};
+  for (auto const& contour : contours1) {
     contour.recover(recovered.data(), std::true_type{});
   }
 
-  mod::detector<cpl::nat_cc> motion{1, 11};
-  motion.detect(cext.outline(), cext.outline(), {}, contours);
+  mod::detector<cpl::nat_cc> mdet{1, 11};
+  auto motion{
+      mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
 
   mrl::matrix<cpl::nat_cc> diff{screen_width, screen_height};
-  for (auto& region : grid.regions()) {
+  for (auto& region : grid1.regions()) {
     for (auto& [key, points] : region.points()) {
       cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
 
       for (auto& [x, y] : points) {
-        diff.data()[y * image.width() + x] = value;
+        diff.data()[y * image1.width() + x] = value;
       }
     }
   }
 
-  auto rgb_o = image.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_m = median.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_m = median1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_c =
       recovered.map([](auto c) noexcept { return native_to_blend(c); });
 
-  auto ctr_o = cext.outline().map([](auto& c) noexcept {
-    return cpl::intensity_to_blend(
-        c.id_ == cte::v1::horizon_id ? cpl::grs_iv{0.f} : cpl::grs_iv{1.f});
-  });
-
-  png::write(ddir / "original.png", screen_width, screen_height, rgb_o.data());
-  png::write(ddir / "median.png", screen_width, screen_height, rgb_m.data());
+  png::write(
+      ddir / "original1.png", screen_width, screen_height, rgb_o1.data());
+  png::write(
+      ddir / "original2.png", screen_width, screen_height, rgb_o2.data());
+  png::write(ddir / "median1.png", screen_width, screen_height, rgb_m.data());
   png::write(ddir / "diff.png", screen_width, screen_height, rgb_d.data());
   png::write(ddir / "contours.png", screen_width, screen_height, rgb_c.data());
-
-  png::write(ddir / "xxxx.png", screen_width, screen_height, ctr_o.data());
 
   return 0;
 }
