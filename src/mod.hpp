@@ -21,7 +21,7 @@ private:
 
 public:
   using contour_id = typename cell_t::id_type;
-  using motion_t = std::tuple<contour_id, std::int32_t>;
+  using motion_t = std::tuple<contour_id, cdt::offset_t>;
 
 private:
   using contour_type =
@@ -42,7 +42,7 @@ private:
       hashed ^= static_cast<std::size_t>(std::get<0>(motion));
       hashed *= 16777619U;
 
-      hashed ^= static_cast<std::size_t>(std::get<1>(motion));
+      hashed ^= cdt::offset_hash{}(std::get<1>(motion));
       hashed *= 16777619U;
 
       return hashed;
@@ -55,7 +55,7 @@ private:
   using motion_tracker_t =
       std::unordered_map<contour_id, motion_counter_t, std::hash<contour_id>>;
 
-  using motion_map = std::unordered_map<contour_id, std::int32_t>;
+  using motion_map = std::unordered_map<contour_id, cdt::offset_t>;
 
 public:
   detector(std::uint8_t margin,
@@ -195,10 +195,11 @@ private:
                       std::uint8_t height,
                       std::size_t stride) {
     auto& counter{tracker_[ref.id_]};
-    for (; height > 0; --height, start += stride) {
-      for (auto end{start + width}; start < end; ++start) {
+    for (std::int32_t y{-half_}; y <= half_; ++y, start += stride) {
+      std::int32_t x{half_};
+      for (auto end{start + width}; start < end; --x, ++start) {
         if (ref.edge_ == start->edge_ && ref.color_ == start->color_) {
-          ++counter[{start->id_, static_cast<std::int16_t>(start - center)}];
+          ++counter[{0, {x, -y}}];
         }
       }
     }
@@ -210,6 +211,7 @@ private:
 
   motion_map refine(contours_type const& contours) const {
     motion_map motions{tracker_.get_allocator()};
+    cdt::offset_t nomove{0, 0};
 
     for (auto& [id, offsets] : tracker_) {
       if (offsets.empty()) {
@@ -222,7 +224,7 @@ private:
           });
 
       if (auto motion{std::get<1>(candidate)};
-          motion != 0 && count > contours[id - 1].perimeter() / 2) {
+          motion != nomove && count > contours[id - 1].perimeter() / 2) {
         motions[id] = motion;
       }
     }
