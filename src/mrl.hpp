@@ -71,6 +71,25 @@ public:
     return output;
   }
 
+  matrix
+      crop(size_type left, size_type right, size_type top, size_type bottom) {
+    auto stride{left + right};
+    matrix output{width_ - stride, height_ - top - bottom};
+
+    for (auto src{data_.data() + top * width_ + left},
+         dst{output.data()},
+         last{output.end()};
+         dst < last;
+         src += stride) {
+
+      for (auto end{src + output.width()}; src < end; ++src, ++dst) {
+        *dst = *src;
+      }
+    }
+
+    return output;
+  }
+
 private:
   size_type width_;
   size_type height_;
