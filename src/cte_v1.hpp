@@ -149,7 +149,7 @@ namespace v1 {
       auto size{(outline_.width() - 2) * outline_.height()};
       std::memset(first, 0, size * sizeof(cell_type));
 
-      for (auto last{first + size - outline_.width()}; first <= last;
+      for (auto last{first + size - 2 * outline_.width()}; first <= last;
            first += outline_.width()) {
         *first = *(first + outline_.width() - 1) = {.id_ = horizon_id};
       }
