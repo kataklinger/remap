@@ -74,9 +74,9 @@ inline constexpr rgb_bc native_to_blend_map[] = {{0x00000000},
 namespace details {
   [[nodiscard]] inline constexpr rgb_bc
       pack_to_blend(rgb_cc red, rgb_cc green, rgb_cc blue) noexcept {
-    return {(static_cast<std::uint32_t>(red.value)) |
+    return {(static_cast<std::uint32_t>(blue.value)) |
             (static_cast<std::uint32_t>(green.value) << 8) |
-            (static_cast<std::uint32_t>(blue.value) << 16)};
+            (static_cast<std::uint32_t>(red.value) << 16)};
   }
 
   [[nodiscard]] inline constexpr grs_iv
