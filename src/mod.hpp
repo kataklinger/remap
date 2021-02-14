@@ -34,23 +34,8 @@ private:
       std::vector<std::uint8_t,
                   all::rebind_alloc_t<allocator_type, std::uint8_t>>;
 
-  struct motion_hash {
-    [[nodiscard]] std::size_t
-        operator()(motion_t const& motion) const noexcept {
-      std::size_t hashed = 2166136261U;
-
-      hashed ^= static_cast<std::size_t>(std::get<0>(motion));
-      hashed *= 16777619U;
-
-      hashed ^= cdt::offset_hash{}(std::get<1>(motion));
-      hashed *= 16777619U;
-
-      return hashed;
-    }
-  };
-
   using motion_counter_t =
-      std::unordered_map<motion_t, std::uint16_t, motion_hash>;
+      std::unordered_map<cdt::offset_t, std::uint16_t, cdt::offset_hash>;
 
   using motion_tracker_t =
       std::unordered_map<contour_id, motion_counter_t, std::hash<contour_id>>;
@@ -199,7 +184,7 @@ private:
       std::int32_t x{half_};
       for (auto end{start + width}; start < end; --x, ++start) {
         if (ref.edge_ == start->edge_ && ref.color_ == start->color_) {
-          ++counter[{0, {x, -y}}];
+          ++counter[{x, -y}];
         }
       }
     }
@@ -223,9 +208,8 @@ private:
             return lhs.second < rhs.second;
           });
 
-      if (auto motion{std::get<1>(candidate)};
-          motion != nomove && count > contours[id - 1].perimeter() / 2) {
-        motions[id] = motion;
+      if (candidate != nomove && count > contours[id - 1].perimeter() / 2) {
+        motions[id] = candidate;
       }
     }
 
