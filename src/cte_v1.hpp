@@ -19,7 +19,7 @@ namespace v1 {
 
     id_type id_;
     pixel_type color_;
-    bool edge_;
+    ctr::edge_side edge_;
   };
 
   template<ctr::pixel Ty>
@@ -108,17 +108,13 @@ namespace v1 {
         auto pixel{path_.front()};
         auto cell{outline + (pixel - image)};
 
-        auto top{push_pixel(pixel, cell, id, -width)};
-        auto bottom{push_pixel(pixel, cell, id, +width)};
-
-        auto left{push_pixel(pixel, cell, id, -1)};
-        auto right{push_pixel(pixel, cell, id, +1)};
-
         cell->color_ = *pixel;
-        cell->edge_ =
-            static_cast<std::uint32_t>(top || bottom || left || right);
+        cell->edge_ = ctr::create_edge(push_pixel(pixel, cell, id, -1),
+                                       push_pixel(pixel, cell, id, +1),
+                                       push_pixel(pixel, cell, id, -width),
+                                       push_pixel(pixel, cell, id, +width));
 
-        result.add_point(pixel, left, right);
+        result.add_point(pixel, cell->edge_);
 
         path_.pop();
       }

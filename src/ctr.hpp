@@ -14,19 +14,77 @@ concept pixel = requires(Ty v) {
   requires cpl::pixel_color<decltype(value(v))>;
 };
 
+enum class edge_side : std::uint8_t {
+  none = 0,
+  left = 1,
+  right = 2,
+  top = 4,
+  bottom = 8
+};
+
+namespace details {
+  [[nodiscard]] inline bool test_side(edge_side tested,
+                                      std::uint8_t desired) noexcept {
+    return (static_cast<std::uint8_t>(tested) & desired) != 0;
+  }
+
+  [[nodiscard]] inline bool test_side(edge_side tested,
+                                      edge_side desired) noexcept {
+    return (static_cast<std::uint8_t>(tested) &
+            static_cast<std::uint8_t>(desired)) != 0;
+  }
+
+} // namespace details
+
+[[nodiscard]] inline bool is_left(edge_side side) noexcept {
+  return details::test_side(side, edge_side::left);
+}
+
+[[nodiscard]] inline bool is_right(edge_side side) noexcept {
+  return details::test_side(side, edge_side::right);
+}
+
+[[nodiscard]] inline bool is_horisontal(edge_side side) noexcept {
+  return details::test_side(side,
+                            static_cast<std::uint8_t>(edge_side::left) |
+                                static_cast<std::uint8_t>(edge_side::right));
+}
+
+[[nodiscard]] inline bool is_top(edge_side side) noexcept {
+  return details::test_side(side, edge_side::top);
+}
+
+[[nodiscard]] inline bool is_bottom(edge_side side) noexcept {
+  return details::test_side(side, edge_side::bottom);
+}
+
+[[nodiscard]] inline bool is_vertical(edge_side side) noexcept {
+  return details::test_side(side,
+                            static_cast<std::uint8_t>(edge_side::top) |
+                                static_cast<std::uint8_t>(edge_side::bottom));
+}
+
+[[nodiscard]] inline edge_side
+    create_edge(bool left, bool right, bool top, bool bottom) {
+  return static_cast<edge_side>(static_cast<std::uint8_t>(left) |
+                                (static_cast<std::uint8_t>(right) << 1) |
+                                (static_cast<std::uint8_t>(top) << 2) |
+                                (static_cast<std::uint8_t>(bottom) << 3));
+}
+
 class edge {
 public:
-  inline edge(std::ptrdiff_t position, bool is_right) noexcept
-      : rep_{static_cast<std::uint32_t>(position << 1) |
-             static_cast<std::uint32_t>(is_right)} {
+  inline edge(std::ptrdiff_t position, edge_side side) noexcept
+      : rep_{static_cast<std::uint32_t>(position << 4) |
+             static_cast<std::uint32_t>(side)} {
   }
 
   [[nodiscard]] inline std::uint32_t position() const noexcept {
-    return rep_ >> 1;
+    return rep_ >> 4;
   }
 
-  [[nodiscard]] inline bool is_right() const noexcept {
-    return (rep_ & 1) != 0;
+  [[nodiscard]] inline edge_side side() const noexcept {
+    return static_cast<edge_side>(rep_ & 0xf);
   }
 
   friend auto operator<=>(edge, edge) = default;
@@ -144,12 +202,15 @@ public:
       , id_{id} {
   }
 
-  inline void
-      add_point(pixel_type const* point, bool left_edge, bool right_edge) {
+  inline void add_point(pixel_type const* point, edge_side side) {
     ++area_;
 
-    if (left_edge || right_edge) {
-      edges_.push_back({point - base_, right_edge});
+    if (is_horisontal(side)) {
+      edges_.push_back({point - base_, side});
+      ++perimeter_;
+    }
+    else if (is_vertical(side)) {
+      ++perimeter_;
     }
   }
 
@@ -159,7 +220,7 @@ public:
 
     std::optional<std::uint32_t> left;
     for (auto edge : edges_) {
-      if (edge.is_right()) {
+      if (is_right(edge.side())) {
         if (left) {
           details::write_pixels(output, left.value(), edge.position(), color);
           left.reset();
@@ -189,6 +250,10 @@ public:
 
   [[nodiscard]] inline std::uint32_t area() const noexcept {
     return area_;
+  }
+
+  [[nodiscard]] inline std::uint32_t perimeter() const noexcept {
+    return perimeter_;
   }
 
   [[nodiscard]] inline std::uint32_t id() const noexcept {
@@ -228,6 +293,7 @@ private:
   std::size_t width_;
 
   std::uint32_t area_{0};
+  std::uint32_t perimeter_{0};
   std::uint32_t id_;
 
   mutable std::optional<box> enclosure_;

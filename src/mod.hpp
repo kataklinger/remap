@@ -55,8 +55,7 @@ private:
   using motion_tracker_t =
       std::unordered_map<contour_id, motion_counter_t, std::hash<contour_id>>;
 
-  using motion_vector =
-      std::vector<motion_t, all::rebind_alloc_t<allocator_type, motion_t>>;
+  using motion_map = std::unordered_map<contour_id, std::int32_t>;
 
 public:
   detector(std::uint8_t margin,
@@ -68,51 +67,58 @@ public:
       , tracker_{alloc} {
   }
 
-  motion_vector detect(source_t const& previous,
-                       source_t const& current,
-                       cdt::offset_t adjustment,
-                       contours_type const& contours) {
+  motion_map detect(source_t const& previous,
+                    source_t const& current,
+                    cdt::offset_t adjustment,
+                    contours_type const& contours) {
     auto width{current.width()};
 
     auto [x, y]{adjustment};
 
-    auto p_start{previous.data() + clip(x) + clip(y) * width};
-    auto c_start{current.data() + clip(-x) + clip(-y) * width};
-    auto c_end{current.end() - clip(y) * width};
-    auto c_size{width - (clip(x) + margin_)};
+    auto left{clip(x)}, right{clip(-x)}, top{clip(y)}, bottom{clip(-y)};
 
-    markings marked{
-        mark_motion(p_start, c_start, c_end, width, c_size, contours.size())};
+    auto p_start{previous.data() + left + top * width};
+    auto c_start{current.data() + right + bottom * width};
+    auto c_end{current.end() - top * width};
+    auto c_size{width - left - right};
+
+    auto marked{mark_motion(p_start, c_start, c_end, width, c_size, contours)};
 
     if (auto adj{std::max(0, -y)}; adj < half_) {
-      auto top{adj * width};
+      auto v_off{adj * width};
       for (auto height{half_ + adj}; height < window_;
            c_start += width, p_start += width, ++height) {
-        process_row(
-            c_start, c_start + c_size, p_start, top, height, x, width, marked);
+        process_row(c_start,
+                    c_start + c_size,
+                    p_start,
+                    v_off,
+                    height,
+                    x,
+                    width,
+                    marked);
       }
     }
 
-    auto top{half_ * width};
+    auto v_off{half_ * width};
 
     for (auto last{c_end - std::max(0, y)}; c_start < last;
          c_start += width, p_start += width) {
       process_row(
-          c_start, c_start + c_size, p_start, top, window_, x, width, marked);
+          c_start, c_start + c_size, p_start, v_off, window_, x, width, marked);
     }
 
     for (; c_start < c_end; c_start += width, p_start += width) {
       process_row(c_start,
                   c_start + c_size,
                   p_start,
-                  top,
+                  v_off,
                   half_ + (c_end - c_start),
                   x,
                   width,
                   marked);
     }
 
-    return refine_motion_data();
+    return refine(contours);
   }
 
 private:
@@ -121,8 +127,8 @@ private:
                                      cell_t const* end,
                                      std::size_t width,
                                      std::size_t window,
-                                     std::size_t count) const {
-    markings marked{count, tracker_.get_allocator()};
+                                     contours_type const& contours) const {
+    markings marked{contours.size(), tracker_.get_allocator()};
 
     for (; current < end; current += width, previous += width) {
       for (auto c{current}, e{current + window}, p{previous}; c < e; ++c, ++p) {
@@ -138,7 +144,7 @@ private:
   void process_row(cell_t const* start,
                    cell_t const* end,
                    cell_t const* prev,
-                   std::uint8_t ver,
+                   std::int32_t ver,
                    std::uint8_t height,
                    std::int32_t hor,
                    std::size_t width,
@@ -146,7 +152,9 @@ private:
     if (auto adj{std::max(0, -hor)}; adj < half_) {
       for (auto last{start + half_ - adj}, first{start}; start < last;
            ++start, ++prev) {
-        if (marked[start->id_ - 1] != 0) {
+
+        if (marked[start->id_ - 1] != 0 &&
+            start->edge_ != ctr::edge_side::none) {
           auto off_v{adj + (start - first)};
           auto width_w{half_ + off_v};
 
@@ -166,13 +174,13 @@ private:
 
     for (auto last{end + std::min(0, -half_ + adj)}; start < last;
          ++start, ++prev) {
-      if (marked[start->id_ - 1] != 0) {
+      if (marked[start->id_ - 1] != 0 && start->edge_ != ctr::edge_side::none) {
         process_window(prev - off_p, prev, *start, window_, height, stride);
       }
     }
 
     for (; start < end; ++start, ++prev) {
-      if (marked[start->id_ - 1] != 0) {
+      if (marked[start->id_ - 1] != 0 && start->edge_ != ctr::edge_side::none) {
         auto width_w{(end - start) + half_ + hor};
         process_window(
             prev - off_p, prev, *start, width_w, height, width - width_w);
@@ -186,10 +194,10 @@ private:
                       std::uint8_t width,
                       std::uint8_t height,
                       std::size_t stride) {
-    auto counter{tracker_[ref.id_]};
+    auto& counter{tracker_[ref.id_]};
     for (; height > 0; --height, start += stride) {
       for (auto end{start + width}; start < end; ++start) {
-        if (ref.edge_ == start->edge_ && start->color_ == ref.color_) {
+        if (ref.edge_ == start->edge_ && ref.color_ == start->color_) {
           ++counter[{start->id_, static_cast<std::int16_t>(start - center)}];
         }
       }
@@ -200,17 +208,22 @@ private:
     return static_cast<std::size_t>(std::max(edge, 0)) + margin_;
   }
 
-  motion_vector refine_motion_data() const {
-    motion_vector motions{tracker_.size(), tracker_.get_allocator()};
+  motion_map refine(contours_type const& contours) const {
+    motion_map motions{tracker_.get_allocator()};
 
     for (auto& [id, offsets] : tracker_) {
-      auto [candidate, _] = *std::max_element(
+      if (offsets.empty()) {
+        continue;
+      }
+
+      auto [candidate, count] = *std::max_element(
           offsets.begin(), offsets.end(), [](auto& lhs, auto& rhs) {
             return lhs.second < rhs.second;
           });
 
-      if (auto motion{std::get<1>(candidate)}; motion != 0) {
-        motions.push_back({id, motion});
+      if (auto motion{std::get<1>(candidate)};
+          motion != 0 && count > contours[id - 1].perimeter() / 2) {
+        motions[id] = motion;
       }
     }
 
