@@ -121,9 +121,8 @@ namespace details {
                            std::uint32_t left,
                            std::uint32_t right,
                            Ty color) noexcept {
-    std::memset(output + left,
-                value(color),
-                static_cast<std::size_t>(right - left) + 1);
+    std::fill_n(
+        output + left, static_cast<std::size_t>(right - left) + 1, color);
   }
 } // namespace details
 
@@ -154,19 +153,19 @@ public:
     }
   }
 
-  void recover(pixel_type* output, std::true_type /*unused*/) const noexcept {
+  template<pixel Pixel>
+  void recover(Pixel* output, Pixel color) const noexcept {
     sort();
-    auto c{color()};
 
     std::optional<std::uint32_t> left;
     for (auto edge : edges_) {
       if (edge.is_right()) {
         if (left) {
-          details::write_pixels(output, left.value(), edge.position(), c);
+          details::write_pixels(output, left.value(), edge.position(), color);
           left.reset();
         }
         else {
-          output[edge.position()] = c;
+          output[edge.position()] = color;
         }
       }
       else {
@@ -175,7 +174,13 @@ public:
     }
   }
 
-  void recover(pixel_type* output, std::false_type /*unused*/) const noexcept {
+  inline void recover(pixel_type* output,
+                      std::true_type /*unused*/) const noexcept {
+    recover(output, color());
+  }
+
+  inline void recover(pixel_type* output,
+                      std::false_type /*unused*/) const noexcept {
     auto c{color()};
     for (auto edge : edges_) {
       output[edge.position()] = c;
