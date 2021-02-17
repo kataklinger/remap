@@ -16,6 +16,9 @@ public:
   using allocator_type = Alloc;
 
 private:
+  template<typename Tx>
+  using rebind_t = all::rebind_alloc_t<allocator_type, Tx>;
+
   using source_t = cte::v1::outline_t<pixel_type>;
   using cell_t = typename source_t::value_type;
 
@@ -24,23 +27,31 @@ public:
   using motion_t = std::tuple<contour_id, cdt::offset_t>;
 
 private:
-  using contour_type =
-      ctr::contour<pixel_type, all::rebind_alloc_t<allocator_type, ctr::edge>>;
-  using contours_type =
-      std::vector<contour_type,
-                  all::rebind_alloc_t<allocator_type, contour_type>>;
+  using contour_type = ctr::contour<pixel_type, rebind_t<ctr::edge>>;
+  using contours_type = std::vector<contour_type, rebind_t<contour_type>>;
 
-  using markings =
-      std::vector<std::uint8_t,
-                  all::rebind_alloc_t<allocator_type, std::uint8_t>>;
+  using markings = std::vector<std::uint8_t, rebind_t<std::uint8_t>>;
 
-  using motion_counter_t =
-      std::unordered_map<cdt::offset_t, std::uint16_t, cdt::offset_hash>;
+  using motion_counter_t = std::unordered_map<
+      cdt::offset_t,
+      std::uint16_t,
+      cdt::offset_hash,
+      std::equal_to<cdt::offset_t>,
+      rebind_t<std::pair<cdt::offset_t const, std::uint16_t>>>;
 
-  using motion_tracker_t =
-      std::unordered_map<contour_id, motion_counter_t, std::hash<contour_id>>;
+  using motion_tracker_t = std::unordered_map<
+      contour_id,
+      motion_counter_t,
+      std::hash<contour_id>,
+      std::equal_to<contour_id>,
+      rebind_t<std::pair<contour_id const, motion_counter_t>>>;
 
-  using motion_map = std::unordered_map<contour_id, cdt::offset_t>;
+  using motion_map =
+      std::unordered_map<contour_id,
+                         cdt::offset_t,
+                         std::hash<contour_id>,
+                         std::equal_to<contour_id>,
+                         rebind_t<std::pair<contour_id const, cdt::offset_t>>>;
 
 public:
   detector(std::uint8_t margin,
@@ -179,7 +190,9 @@ private:
                       std::uint8_t width,
                       std::uint8_t height,
                       std::size_t stride) {
-    auto& counter{tracker_[ref.id_]};
+    auto& counter{
+        tracker_.try_emplace(ref.id_, tracker_.get_allocator()).first->second};
+
     for (std::int32_t y{-half_}; y <= half_; ++y, start += stride) {
       std::int32_t x{half_};
       for (auto end{start + width}; start < end; --x, ++start) {
@@ -195,9 +208,9 @@ private:
   }
 
   motion_map refine(contours_type const& contours) const {
-    motion_map motions{tracker_.get_allocator()};
-    cdt::offset_t nomove{0, 0};
+    constexpr cdt::offset_t nomove{0, 0};
 
+    motion_map motions{tracker_.get_allocator()};
     for (auto& [id, offsets] : tracker_) {
       if (offsets.empty()) {
         continue;
@@ -209,6 +222,9 @@ private:
           });
 
       if (candidate != nomove && count > contours[id - 1].perimeter() / 2) {
+        if (std::get<1>(candidate) > 0) {
+          count = count;
+        }
         motions[id] = candidate;
       }
     }
