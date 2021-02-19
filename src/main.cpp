@@ -63,7 +63,7 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
   }
 
   input.read(reinterpret_cast<char*>(temp.data()),
-             temp.width() * temp.height());
+             static_cast<std::size_t>(temp.width()) * temp.height());
   input.close();
 
   return temp.crop(31, 53, 55, 105);
@@ -74,6 +74,8 @@ void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
 }
 
 int main() {
+  constexpr std::size_t perf_loops{1000};
+
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
@@ -87,9 +89,9 @@ int main() {
       [&image1, &median1, &extractor1] {
         [[maybe_unused]] auto grid{extractor1.extract(image1, median1)};
       },
-      100,
+      perf_loops,
       "median",
-      false);
+      true);
 
   auto grid1{extractor1.extract(image1, median1)};
   auto grid2{extractor2.extract(image2, median2)};
@@ -101,18 +103,18 @@ int main() {
       [&cfg, &grid1, &grid2]() {
         [[maybe_unused]] auto result{kpm::match(cfg, grid1, grid2)};
       },
-      100,
+      perf_loops,
       "match",
-      false);
+      true);
 
   cte::v1::extractor<cpl::nat_cc>::allocator_type alloc{};
   cte::v1::extractor<cpl::nat_cc> cext1{image1.width(), image1.height(), alloc};
   cte::v1::extractor<cpl::nat_cc> cext2{image1.width(), image1.height(), alloc};
 
   perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
-            100,
+            perf_loops,
             "contour",
-            false);
+            true);
 
   mrl::matrix<cpl::nat_cc> recovered{image1.width(), image1.height()};
 
@@ -125,6 +127,15 @@ int main() {
 
   mrl::matrix<cpl::rgb_bc> rgb_mh{image1.width(), image1.height()};
   mrl::matrix<cpl::rgb_bc> rgb_mv{image1.width(), image1.height()};
+
+  perf_test(
+      [&mdet, &cext1, &cext2, &offset, &contours2]() {
+        auto motion{
+            mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
+      },
+      perf_loops,
+      "motion",
+      true);
 
   for (auto const& contour : contours2) {
     auto a{motion[contour.id()]};
@@ -166,14 +177,16 @@ int main() {
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_m = median1.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_m1 = median1.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_m2 = median2.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_c =
       recovered.map([](auto c) noexcept { return native_to_blend(c); });
 
   write_rgb("original1.png", rgb_o1);
   write_rgb("original2.png", rgb_o2);
-  write_rgb("median1.png", rgb_m);
+  write_rgb("median1.png", rgb_m1);
+  write_rgb("median2.png", rgb_m2);
   write_rgb("diff.png", rgb_d);
   write_rgb("contours.png", rgb_c);
 

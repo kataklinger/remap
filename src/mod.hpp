@@ -67,6 +67,8 @@ public:
                     source_t const& current,
                     cdt::offset_t adjustment,
                     contours_type const& contours) {
+    tracker_.clear();
+
     auto width{current.width()};
 
     auto [x, y]{adjustment};
