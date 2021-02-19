@@ -2,7 +2,7 @@
 #include "cte_v1.hpp"
 #include "kpe_v1.hpp"
 #include "kpm.hpp"
-#include "mod.hpp"
+#include "mod_v1.hpp"
 #include "pngu.hpp"
 
 #include <chrono>
@@ -121,7 +121,7 @@ int main() {
   auto contours1{cext1.extract(median1)};
   auto contours2{cext2.extract(median2)};
 
-  mod::detector<cpl::nat_cc> mdet{2, 11};
+  mod::v1::detector<cpl::nat_cc> mdet{2, 11};
   auto motion{
       mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
 

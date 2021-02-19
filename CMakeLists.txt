@@ -15,7 +15,7 @@ add_executable (remap
 	"src/kpm.hpp"
 	"src/ctr.hpp"
 	"src/cte_v1.hpp"
-	"src/mod.hpp"
+	"src/mod_v1.hpp"
 	"src/pngu.hpp"
 	"src/main.cpp")
 
