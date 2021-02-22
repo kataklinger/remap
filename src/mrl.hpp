@@ -73,21 +73,36 @@ public:
 
   matrix
       crop(size_type left, size_type right, size_type top, size_type bottom) {
-    auto stride{left + right};
-    matrix output{width_ - stride, height_ - top - bottom};
+    matrix output{width_ - left - right, height_ - top - bottom};
 
-    for (auto src{data_.data() + top * width_ + left},
+    auto nwidth{output.width()};
+
+    for (auto src{data() + top * width_ + left},
          dst{output.data()},
          last{output.end()};
          dst < last;
-         src += stride) {
+         src += width_, dst += nwidth) {
 
-      for (auto end{src + output.width()}; src < end; ++src, ++dst) {
-        *dst = *src;
-      }
+      std::copy(src, src + nwidth, dst);
     }
 
     return output;
+  }
+
+  matrix
+      extend(size_type left, size_type right, size_type top, size_type bottom) {
+    matrix output{width_ + left + right, height_ + top + bottom};
+
+    auto nwidth{output.width()};
+
+    for (auto src{data()},
+         dst{output.data() + top * nwidth + left},
+         last{end()};
+         src < last;
+         src += width_, dst += nwidth) {
+
+      std::copy(src, src + width_, dst);
+    }
   }
 
 private:
