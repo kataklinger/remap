@@ -7,15 +7,19 @@
 namespace mrl {
 using size_type = std::size_t;
 
-template<typename Ty>
+template<typename Ty, typename Alloc = std::allocator<Ty>>
 class matrix {
 public:
   using value_type = Ty;
+  using allocator_type = Alloc;
 
 public:
-  inline matrix(size_type width, size_type height)
+  inline matrix(size_type width,
+                size_type height,
+                allocator_type const& alloc = allocator_type{})
       : width_{width}
-      , height_{height} {
+      , height_{height}
+      , data_{alloc} {
     data_.resize(width * height);
   }
 
@@ -60,7 +64,7 @@ public:
   [[nodiscard]] auto map(Fn convert) const
       requires std::invocable<Fn, value_type const&> {
     using target_type = std::invoke_result_t<Fn, const value_type&>;
-    matrix<target_type> output{width_, height_};
+    matrix<target_type> output{width_, height_, data_.get_allocator()};
 
     auto out{output.data()};
     for (auto cur{data_.data()}, last{data_.data() + data_.size()}; cur < last;
@@ -73,7 +77,8 @@ public:
 
   matrix
       crop(size_type left, size_type right, size_type top, size_type bottom) {
-    matrix output{width_ - left - right, height_ - top - bottom};
+    matrix output{
+        width_ - left - right, height_ - top - bottom, data_.get_allocator()};
 
     auto nwidth{output.width()};
 
@@ -91,7 +96,8 @@ public:
 
   matrix
       extend(size_type left, size_type right, size_type top, size_type bottom) {
-    matrix output{width_ + left + right, height_ + top + bottom};
+    matrix output{
+        width_ + left + right, height_ + top + bottom, data_.get_allocator()};
 
     auto nwidth{output.width()};
 
@@ -111,7 +117,7 @@ private:
   size_type width_;
   size_type height_;
 
-  std::vector<value_type> data_;
+  std::vector<value_type, allocator_type> data_;
 };
 
 } // namespace mrl
