@@ -1,8 +1,10 @@
 ﻿
 #include "cte_v1.hpp"
+#include "fgm.hpp"
 #include "kpe_v1.hpp"
 #include "kpm.hpp"
 #include "mod_v1.hpp"
+
 #include "pngu.hpp"
 
 #include <chrono>
@@ -15,8 +17,6 @@
 
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
-
-using extractor_t = kpe::v1::extractor<kpr::grid<4, 2>, 16>;
 
 inline uint64_t now() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -79,8 +79,10 @@ int main() {
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
-  extractor_t extractor1{image1.width(), image1.height()};
-  extractor_t extractor2{image1.width(), image1.height()};
+  using kpe_t = kpe::v1::extractor<kpr::grid<4, 2>, 16>;
+
+  kpe_t extractor1{image1.width(), image1.height()};
+  kpe_t extractor2{image1.width(), image1.height()};
 
   mrl::matrix<cpl::nat_cc> median1{image1.width(), image1.height()};
   mrl::matrix<cpl::nat_cc> median2{image1.width(), image1.height()};
@@ -91,7 +93,7 @@ int main() {
       },
       perf_loops,
       "median",
-      true);
+      false);
 
   auto grid1{extractor1.extract(image1, median1)};
   auto grid2{extractor2.extract(image2, median2)};
@@ -105,7 +107,7 @@ int main() {
       },
       perf_loops,
       "match",
-      true);
+      false);
 
   cte::v1::extractor<cpl::nat_cc>::allocator_type alloc{};
   cte::v1::extractor<cpl::nat_cc> cext1{image1.width(), image1.height(), alloc};
@@ -114,7 +116,7 @@ int main() {
   perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
             perf_loops,
             "contour",
-            true);
+            false);
 
   mrl::matrix<cpl::nat_cc> recovered{image1.width(), image1.height()};
 
@@ -135,7 +137,7 @@ int main() {
       },
       perf_loops,
       "motion",
-      true);
+      false);
 
   for (auto const& contour : contours2) {
     auto a{motion[contour.id()]};
@@ -174,6 +176,9 @@ int main() {
       }
     }
   }
+
+  fgm::fragment<16, cpl::nat_cc> seg{10, 10};
+  auto img{seg.generate()};
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });

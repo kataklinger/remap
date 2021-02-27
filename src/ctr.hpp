@@ -7,13 +7,6 @@
 #include <vector>
 
 namespace ctr {
-template<typename Ty>
-concept pixel = requires(Ty v) {
-  requires std::is_trivial_v<Ty>;
-  requires std::totally_ordered<Ty>;
-  requires cpl::pixel_color<decltype(value(v))>;
-};
-
 enum class edge_side : std::uint8_t {
   none = 0,
   left = 1,
@@ -174,7 +167,7 @@ namespace details {
         {edges.front().position() / width, edges.back().position() / width}};
   }
 
-  template<pixel Ty>
+  template<cpl::pixel Ty>
   inline void write_pixels(Ty* output,
                            std::uint32_t left,
                            std::uint32_t right,
@@ -184,7 +177,7 @@ namespace details {
   }
 } // namespace details
 
-template<pixel Ty, typename Alloc = std::allocator<edge>>
+template<cpl::pixel Ty, typename Alloc = std::allocator<edge>>
 class contour {
 public:
   using pixel_type = Ty;
@@ -214,7 +207,7 @@ public:
     }
   }
 
-  template<pixel Pixel>
+  template<cpl::pixel Pixel>
   void recover(Pixel* output, Pixel color) const noexcept {
     sort();
 

@@ -9,7 +9,7 @@
 
 namespace mod {
 namespace v1 {
-  template<ctr::pixel Ty, typename Alloc = std::allocator<char>>
+  template<cpl::pixel Ty, typename Alloc = std::allocator<char>>
   class detector {
   public:
     using pixel_type = Ty;
@@ -54,19 +54,19 @@ namespace v1 {
         rebind_t<std::pair<contour_id const, cdt::offset_t>>>;
 
   public:
-    detector(std::uint8_t margin,
-             std::uint8_t window,
-             allocator_type const& alloc = allocator_type{})
+    inline detector(std::uint8_t margin,
+                    std::uint8_t window,
+                    allocator_type const& alloc = allocator_type{})
         : margin_{margin}
         , window_{window}
         , half_{static_cast<std::uint8_t>(window >> 1)}
         , tracker_{alloc} {
     }
 
-    motion_map detect(source_t const& previous,
-                      source_t const& current,
-                      cdt::offset_t adjustment,
-                      contours_type const& contours) {
+    [[nodiscard]] motion_map detect(source_t const& previous,
+                                    source_t const& current,
+                                    cdt::offset_t adjustment,
+                                    contours_type const& contours) {
       tracker_.clear();
 
       auto width{current.width()};
@@ -219,7 +219,7 @@ namespace v1 {
       return static_cast<std::size_t>(std::max(edge, 0)) + margin_;
     }
 
-    motion_map refine(contours_type const& contours) const {
+    [[nodiscard]] motion_map refine(contours_type const& contours) const {
       constexpr cdt::offset_t nomove{0, 0};
 
       motion_map motions{tracker_.get_allocator()};

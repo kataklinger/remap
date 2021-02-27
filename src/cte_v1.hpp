@@ -12,7 +12,7 @@ namespace cte {
 namespace v1 {
   inline constexpr std::uint16_t horizon_id{0xffff};
 
-  template<ctr::pixel Ty>
+  template<cpl::pixel Ty>
   struct cell {
     using pixel_type = Ty;
     using id_type = std::uint16_t;
@@ -22,10 +22,10 @@ namespace v1 {
     ctr::edge_side edge_;
   };
 
-  template<ctr::pixel Ty>
+  template<cpl::pixel Ty>
   using outline_t = mrl::matrix<cell<Ty>>;
 
-  template<ctr::pixel Ty, typename Alloc = std::allocator<ctr::edge>>
+  template<cpl::pixel Ty, typename Alloc = std::allocator<ctr::edge>>
   class extractor {
   public:
     using pixel_type = Ty;

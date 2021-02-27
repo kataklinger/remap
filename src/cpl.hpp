@@ -22,7 +22,9 @@ struct grs_intensity_value_t {};
 
 template<pixel_color Ty, typename Tag>
 struct color_t {
-  Ty value;
+  using value_type = Ty;
+
+  value_type value;
   friend auto operator<=>(color_t const&, color_t const&) = default;
 };
 
@@ -30,6 +32,15 @@ template<pixel_color Ty, typename Tag>
 Ty value(color_t<Ty, Tag> const& color) {
   return color.value;
 }
+
+template<typename Ty>
+concept pixel = requires(Ty v) {
+  typename Ty::value_type;
+
+  requires std::is_trivial_v<Ty>;
+  requires std::totally_ordered<Ty>;
+  requires cpl::pixel_color<decltype(value(v))>;
+};
 
 using rgb_cc = color_t<std::uint8_t, rgb_component_color_t>;
 using rgb_bc = color_t<std::uint32_t, rgb_blended_color_t>;
