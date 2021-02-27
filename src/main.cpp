@@ -15,6 +15,12 @@
 #include <cstring>
 #include <queue>
 
+namespace mga {
+class generator {
+public:
+};
+} // namespace mga
+
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
 
@@ -177,8 +183,12 @@ int main() {
     }
   }
 
-  fgm::fragment<16, cpl::nat_cc> seg{10, 10};
-  auto img{seg.generate()};
+  fgm::fragment<16, cpl::nat_cc> frag{image1.width(), image1.height()};
+
+  frag.blit(0, 0, image1);
+  frag.blit(std::get<0>(*offset), std::get<1>(*offset), image2);
+
+  auto merged{frag.generate()};
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
@@ -187,6 +197,8 @@ int main() {
   auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_c =
       recovered.map([](auto c) noexcept { return native_to_blend(c); });
+
+  auto rgb_g = merged.map([](auto c) noexcept { return native_to_blend(c); });
 
   write_rgb("original1.png", rgb_o1);
   write_rgb("original2.png", rgb_o2);
@@ -198,9 +210,7 @@ int main() {
   write_rgb("motion_h.png", rgb_mh);
   write_rgb("motion_v.png", rgb_mv);
 
-  // write_rgb("motion_h.png", cext1.outline().map([](auto c) {
-  //  return cpl::rgb_bc(c.id_ == 0xffff ? 0x00ffff : 0);
-  //}));
+  write_rgb("merged.png", rgb_g);
 
   return 0;
 }

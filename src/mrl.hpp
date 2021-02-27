@@ -103,6 +103,8 @@ public:
 
       std::copy(src, src + width_, dst);
     }
+
+    return output;
   }
 
 private:

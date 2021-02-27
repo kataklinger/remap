@@ -15,7 +15,7 @@ public:
 
   using dot_type = dot_t<depth>;
   using matrix_type = mrl::matrix<dot_type>;
-  using step_type = std::uint16_t;
+  using step_type = mrl::size_type;
 
 public:
   inline fragment(step_type hstep, step_type vstep) noexcept
@@ -26,14 +26,14 @@ public:
 
   void blit(std::int32_t x,
             std::int32_t y,
-            mrl::matrix<pixel_type> const& image) const noexcept {
+            mrl::matrix<pixel_type> const& image) {
     ensure(x, y);
 
     auto adj_x{x - x_}, adj_y{y - y_};
     auto stride{dots_.width() - image.width()};
 
     auto out{dots_.data() + adj_x + adj_y * dots_.width()};
-    for (auto first{image.data()}, last{image.data()}; first < last;
+    for (auto first{image.data()}, last{image.end()}; first < last;
          out += stride) {
       for (auto end{first + image.width()}; first < end; ++first, ++out) {
         ++(*out)[value(*first)];
@@ -82,7 +82,7 @@ private:
     }
 
     if (extend) {
-      dots_.extend(left, right, top, bottom);
+      dots_ = dots_.extend(left, right, top, bottom);
     }
   }
 
