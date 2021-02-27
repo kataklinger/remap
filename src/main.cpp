@@ -1,9 +1,9 @@
 ﻿
-#include "cte_v1.hpp"
+#include "cte.hpp"
 #include "fgm.hpp"
-#include "kpe_v1.hpp"
+#include "kpe.hpp"
 #include "kpm.hpp"
-#include "mod_v1.hpp"
+#include "mod.hpp"
 
 #include "pngu.hpp"
 
@@ -79,7 +79,7 @@ int main() {
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
-  using kpe_t = kpe::v1::extractor<kpr::grid<4, 2>, 16>;
+  using kpe_t = kpe::extractor<kpr::grid<4, 2>, 16>;
 
   kpe_t extractor1{image1.width(), image1.height()};
   kpe_t extractor2{image1.width(), image1.height()};
@@ -109,9 +109,9 @@ int main() {
       "match",
       false);
 
-  cte::v1::extractor<cpl::nat_cc>::allocator_type alloc{};
-  cte::v1::extractor<cpl::nat_cc> cext1{image1.width(), image1.height(), alloc};
-  cte::v1::extractor<cpl::nat_cc> cext2{image1.width(), image1.height(), alloc};
+  cte::extractor<cpl::nat_cc>::allocator_type alloc{};
+  cte::extractor<cpl::nat_cc> cext1{image1.width(), image1.height(), alloc};
+  cte::extractor<cpl::nat_cc> cext2{image1.width(), image1.height(), alloc};
 
   perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
             perf_loops,
@@ -123,7 +123,7 @@ int main() {
   auto contours1{cext1.extract(median1)};
   auto contours2{cext2.extract(median2)};
 
-  mod::v1::detector<cpl::nat_cc> mdet{2, 11};
+  mod::detector<cpl::nat_cc> mdet{2, 11};
   auto motion{
       mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
 
