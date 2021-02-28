@@ -16,6 +16,7 @@
 #include <queue>
 
 namespace mga {
+template<cpl::pixel Pixel>
 class generator {
 public:
 };
@@ -85,7 +86,9 @@ int main() {
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
-  using kpe_t = kpe::extractor<kpr::grid<4, 2>, 16>;
+  using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>,
+                               16,
+                               std::allocator<char>>;
 
   kpe_t extractor1{image1.width(), image1.height()};
   kpe_t extractor2{image1.width(), image1.height()};

@@ -48,10 +48,9 @@ namespace details {
   using collector_t =
       std::vector<ticket_t<Cfg>, get_allocator<Cfg, ticket_t<Cfg>>>;
 
-  template<typename Total>
-  void get_offsets(kpr::region::points_t const& previous,
-                   kpr::region::points_t const& current,
-                   Total& total) {
+  template<typename Total, typename Points>
+  void
+      get_offsets(Points const& previous, Points const& current, Total& total) {
     for (auto& [px, py] : previous) {
       for (auto& [cx, cy] : current) {
         cdt::offset_t off{
@@ -63,10 +62,10 @@ namespace details {
     }
   }
 
-  template<bool Switch, match_config Cfg>
+  template<bool Switch, match_config Cfg, typename Region>
   [[nodiscard]] totalizator_t<Cfg> count_offsets(Cfg& config,
-                                                 kpr::region const& previous,
-                                                 kpr::region const& current) {
+                                                 Region const& previous,
+                                                 Region const& current) {
     totalizator_t<Cfg> total{config.get_allocator()};
 
     auto& prev_group{previous.points()};
@@ -118,21 +117,20 @@ namespace details {
     return selected;
   }
 
-  template<match_config Cfg, bool Switch>
+  template<match_config Cfg, typename Region, bool Switch>
   [[nodiscard]] inline ticket_t<Cfg>
       vote_helper(Cfg& config,
-                  kpr::region const& previous,
-                  kpr::region const& current,
+                  Region const& previous,
+                  Region const& current,
                   std::bool_constant<Switch> /*unused*/) {
     return top_offsets(config,
                        count_offsets<Switch>(config, previous, current),
                        Cfg::region_votes);
   }
 
-  template<match_config Cfg>
-  [[nodiscard]] inline ticket_t<Cfg> vote(Cfg& config,
-                                          kpr::region const& previous,
-                                          kpr::region const& current) {
+  template<match_config Cfg, typename Region>
+  [[nodiscard]] inline ticket_t<Cfg>
+      vote(Cfg& config, Region const& previous, Region const& current) {
     return previous.counts()[2] < Cfg::weight_switch ||
                    current.counts()[2] <= Cfg::weight_switch
                ? vote_helper(config, previous, current, std::true_type{})
@@ -170,19 +168,22 @@ namespace details {
 
 } // namespace details
 
-template<match_config Cfg, std::size_t Width, std::size_t Height>
+template<match_config Cfg,
+         typename Alloc,
+         std::size_t Width,
+         std::size_t Height>
 [[nodiscard]] std::optional<cdt::offset_t>
     match(Cfg& config,
-          kpr::grid<Width, Height> const& previous,
-          kpr::grid<Width, Height> const& current) {
+          kpr::grid<Width, Height, Alloc> const& previous,
+          kpr::grid<Width, Height, Alloc> const& current) {
   using namespace details;
 
-  using gird_t = kpr::grid<Width, Height>;
+  using gird_t = kpr::grid<Width, Height, Alloc>;
 
   collector_t<Cfg> tickets{config.get_allocator()};
   tickets.reserve(gird_t::region_count);
 
-  auto &prev_regs{previous.regions()}, &curr_regs{current.regions()};
+  auto prev_regs{previous.regions()}, curr_regs{current.regions()};
 
   for (std::size_t i{0}; i < gird_t::region_count; ++i) {
     tickets.push_back(vote(config, prev_regs[i], curr_regs[i]));

@@ -63,10 +63,15 @@ namespace details {
   }
 } // namespace details
 
-template<kpr::gridlike Grid, std::size_t Overlap>
+template<kpr::gridlike Grid, std::size_t Overlap, typename Alloc>
 class extractor {
 public:
   using grid_type = Grid;
+  using allocator_type = Alloc;
+
+  using matrix_type =
+      mrl::matrix<cpl::nat_cc,
+                  all::rebind_alloc_t<allocator_type, cpl::nat_cc>>;
 
 private:
   template<typename Outer, typename Inner>
@@ -75,17 +80,20 @@ private:
   inline static constexpr auto reg_overlap{Overlap};
 
 public:
-  inline extractor(mrl::size_type width, mrl::size_type height)
+  inline extractor(mrl::size_type width,
+                   mrl::size_type height,
+                   allocator_type const& alloc = allocator_type{})
       : temp_{width, height}
       , reg_width_{width / grid_type::width - reg_overlap / 2}
       , reg_height_{height / grid_type::height - reg_overlap / 2}
       , reg_excl_stride_{height * reg_width_}
-      , reg_mid_stride_{height * reg_overlap} {
+      , reg_mid_stride_{height * reg_overlap}
+      , allocator_{alloc} {
   }
 
-  [[nodiscard]] grid_type extract(mrl::matrix<cpl::nat_cc> const& image,
-                                  mrl::matrix<cpl::nat_cc>& median) {
-    grid_.clear();
+  [[nodiscard]] grid_type extract(matrix_type const& image,
+                                  matrix_type& median) {
+    grid_type grid{allocator_};
 
     auto tmp = temp_.data();
     for (auto row{image.data()}, last{image.end()}; row < last;
@@ -94,9 +102,9 @@ public:
       ++tmp;
     }
 
-    col_out(image, median);
+    col_out(image, median, grid);
 
-    return std::move(grid_);
+    return grid;
   }
 
 private:
@@ -139,43 +147,45 @@ private:
   }
 
   void col_out(mrl::matrix<cpl::nat_cc> const& image,
-               mrl::matrix<cpl::nat_cc>& median) {
+               mrl::matrix<cpl::nat_cc>& median,
+               grid_type& grid) {
     auto start{image.data() + image.width() * kernel_half};
     auto raw{start + kernel_half};
     auto out{median.data() + (median.width() + 1) * kernel_half};
 
-    col_out_gen<grid_type::width>(start, raw, out);
+    col_out_gen<grid_type::width>(start, raw, out, grid);
   }
 
   template<std::size_t Sect>
   inline auto col_out_gen(cpl::nat_cc const* start,
                           cpl::nat_cc const*& raw,
-                          cpl::nat_cc*& out) {
+                          cpl::nat_cc*& out,
+                          grid_type& grid) {
     if constexpr (Sect > 0) {
       if constexpr (Sect < grid_type::width) {
         using low_t = std::index_sequence<Sect - 1>;
         using mid_t = std::index_sequence<Sect - 1, Sect>;
 
-        auto first{col_out_gen<Sect - 1>(start, raw, out)};
+        auto first{col_out_gen<Sect - 1>(start, raw, out, grid)};
         auto last{first + reg_excl_stride_};
 
-        col_out_reg<low_t>(start, raw, out, first, last);
+        col_out_reg<low_t>(start, raw, out, first, last, grid);
 
         first = last;
         last += reg_mid_stride_;
 
-        col_out_reg<mid_t>(start, raw, out, first, last);
+        col_out_reg<mid_t>(start, raw, out, first, last, grid);
 
         return last;
       }
       else {
         using seq_t = std::index_sequence<Sect - 1>;
 
-        auto first{col_out_gen<Sect - 1>(start, raw, out)};
+        auto first{col_out_gen<Sect - 1>(start, raw, out, grid)};
         auto last{temp_.data() +
                   temp_.height() * (temp_.width() - kernel_half)};
 
-        col_out_reg<seq_t>(start, raw, out, first, last);
+        col_out_reg<seq_t>(start, raw, out, first, last, grid);
       }
     }
     else {
@@ -188,10 +198,11 @@ private:
                    cpl::nat_cc const*& raw,
                    cpl::nat_cc*& out,
                    __m256i const* first,
-                   __m256i const* last) {
+                   __m256i const* last,
+                   grid_type& grid) {
     for (; first < last; first += temp_.height(), ++raw, ++out) {
       auto x = static_cast<mrl::size_type>(raw - start);
-      col_in<Outer>(x, raw, first, out);
+      col_in<Outer>(x, raw, first, out, grid);
     }
   }
 
@@ -199,7 +210,8 @@ private:
   void col_in(mrl::size_type x,
               cpl::nat_cc const* raw,
               __m256i const* col,
-              cpl::nat_cc* out) {
+              cpl::nat_cc* out,
+              grid_type& grid) {
     auto first{col};
 
     __m256i sum5{*(first++)};
@@ -214,12 +226,12 @@ private:
                      weight != 0) {
       kpr::code code;
       encode_keypoint(raw, code.data(), weight);
-      grid_.add(code,
-                kpr::point{x, kernel_half},
-                explode_t<Outer, std::index_sequence<0>>{});
+      grid.add(code,
+               kpr::point{x, kernel_half},
+               explode_t<Outer, std::index_sequence<0>>{});
     }
 
-    col_in_gen<grid_type::height, Outer>(x, raw, col, out, sum3, sum5);
+    col_in_gen<grid_type::height, Outer>(x, raw, col, out, sum3, sum5, grid);
   }
 
   template<std::size_t Sect, typename Outer>
@@ -228,31 +240,37 @@ private:
                          __m256i const* col,
                          cpl::nat_cc*& out,
                          __m256i& sum3,
-                         __m256i& sum5) {
+                         __m256i& sum5,
+                         grid_type& grid) {
     if constexpr (Sect > 0) {
       if constexpr (Sect < grid_type::height) {
         using low_t = std::index_sequence<Sect - 1>;
         using mid_t = std::index_sequence<Sect - 1, Sect>;
 
-        auto first{col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5)};
+        auto first{
+            col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5, grid)};
         auto last{first + reg_height_};
 
-        col_in_reg<Outer, low_t>(x, raw, col, out, sum3, sum5, first, last);
+        col_in_reg<Outer, low_t>(
+            x, raw, col, out, sum3, sum5, first, last, grid);
 
         first = last;
         last += reg_overlap;
 
-        col_in_reg<Outer, mid_t>(x, raw, col, out, sum3, sum5, first, last);
+        col_in_reg<Outer, mid_t>(
+            x, raw, col, out, sum3, sum5, first, last, grid);
 
         return last;
       }
       else {
         using seq_t = std::index_sequence<Sect - 1>;
 
-        auto first{col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5)};
+        auto first{
+            col_in_gen<Sect - 1, Outer>(x, raw, col, out, sum3, sum5, grid)};
         auto last{col + temp_.height() - kernel_half};
 
-        col_in_reg<Outer, seq_t>(x, raw, col, out, sum3, sum5, first, last);
+        col_in_reg<Outer, seq_t>(
+            x, raw, col, out, sum3, sum5, first, last, grid);
       }
     }
     else {
@@ -268,7 +286,8 @@ private:
                   __m256i& sum3,
                   __m256i& sum5,
                   __m256i const* first,
-                  __m256i const* last) {
+                  __m256i const* last,
+                  grid_type& grid) {
     for (; first < last; ++first) {
       raw += temp_.width();
       out += temp_.width();
@@ -283,7 +302,7 @@ private:
 
         kpr::code code;
         encode_keypoint(raw, code.data(), weight);
-        grid_.add(code, kpr::point{x, y}, explode_t<Outer, Inner>{});
+        grid.add(code, kpr::point{x, y}, explode_t<Outer, Inner>{});
       }
     }
   }
@@ -380,13 +399,14 @@ private:
   details::vec_unit unit_;
 
   mrl::matrix<__m256i> temp_;
-  grid_type grid_;
 
   std::size_t reg_width_;
   std::size_t reg_height_;
 
   std::size_t reg_excl_stride_;
   std::size_t reg_mid_stride_;
+
+  allocator_type allocator_;
 };
 
 } // namespace kpe

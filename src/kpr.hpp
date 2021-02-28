@@ -6,6 +6,8 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <memory>
+#include <span>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -85,16 +87,31 @@ template<std::size_t InSize, typename Outer, typename Inner>
 using grid_explode = typename details::
     explode<InSize, std::decay_t<Outer>, std::decay_t<Inner>>::type;
 
+template<typename Alloc>
 class region {
 public:
   static inline constexpr std::size_t max_weight{3};
 
+  using allocator_type = Alloc;
+
   using points_t = std::vector<point>;
-  using points_store =
-      std::unordered_map<code, points_t, code_hash, std::equal_to<code>>;
+
+  using points_alloc_t =
+      all::rebind_alloc_t<allocator_type, std::pair<code const, points_t>>;
+
+  using points_store = std::unordered_map<code,
+                                          points_t,
+                                          code_hash,
+                                          std::equal_to<code>,
+                                          points_alloc_t>;
+
   using count_store = std::array<std::size_t, max_weight>;
 
 public:
+  inline explicit region(allocator_type const& alloc = allocator_type{})
+      : points_{points_alloc_t{alloc}} {
+  }
+
   inline void add(code const& key, point const& pt) {
     points_[key].push_back(pt);
     ++weight_count_[static_cast<std::size_t>(weight(key))];
@@ -117,7 +134,7 @@ private:
   count_store weight_count_{};
 };
 
-template<std::size_t Width, std::size_t Height>
+template<std::size_t Width, std::size_t Height, typename Alloc>
 class grid {
   static_assert(Width > 0);
   static_assert(Height > 0);
@@ -127,22 +144,23 @@ public:
   static inline constexpr std::size_t height{Height};
   static inline constexpr std::size_t region_count{width * height};
 
-  using region_store = std::array<region, region_count>;
+  using allocator_type = Alloc;
+  using region_type = region<allocator_type>;
+
+  using regions_t = std::span<region_type const, region_count>;
 
 public:
+  inline explicit grid(allocator_type const& alloc = allocator_type{}) {
+    std::uninitialized_fill_n(regions_, region_count, region_type{alloc});
+  }
+
   template<std::size_t... Idxs>
   inline void
       add(code const& key, point pt, std::index_sequence<Idxs...> /**/) {
     add_intern(key, pt, std::integral_constant<std::size_t, Idxs>{}...);
   }
 
-  inline void clear() noexcept {
-    for (auto& region : regions_) {
-      region.clear();
-    }
-  }
-
-  [[nodiscard]] inline region_store const& regions() const noexcept {
+  [[nodiscard]] inline regions_t regions() const noexcept {
     return regions_;
   }
 
@@ -160,7 +178,7 @@ private:
   }
 
 private:
-  region_store regions_;
+  region_type regions_[region_count];
 };
 
 template<typename Ty>
@@ -171,7 +189,9 @@ concept gridlike = requires(Ty g) {
   requires std::unsigned_integral<decltype(Ty::height)>;
   requires Ty::height > 0;
 
-  {g.clear()};
+  {g.add(std::declval<code&&>(),
+         std::declval<point&&>(),
+         std::index_sequence<0>{})};
 };
 
 } // namespace kpr
