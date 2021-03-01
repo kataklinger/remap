@@ -24,9 +24,10 @@ public:
       , dots_{hstep, vstep} {
   }
 
+  template<typename Alloc>
   void blit(std::int32_t x,
             std::int32_t y,
-            mrl::matrix<pixel_type> const& image) {
+            mrl::matrix<pixel_type, Alloc> const& image) {
     ensure(x, y);
 
     auto adj_x{x - x_}, adj_y{y - y_};
@@ -66,7 +67,7 @@ private:
       x_ -= hstep_;
       extend = true;
     }
-    else if (x > x + dots_.width() - hstep_) {
+    else if (x > static_cast<std::int32_t>(x_ + dots_.width() - hstep_)) {
       right = hstep_;
       extend = true;
     }
@@ -76,7 +77,7 @@ private:
       y_ -= vstep_;
       extend = true;
     }
-    else if (y > y + dots_.height() - vstep_) {
+    else if (y > static_cast<std::int32_t>(y_ + dots_.height() - vstep_)) {
       bottom = vstep_;
       extend = true;
     }
