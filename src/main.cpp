@@ -14,11 +14,103 @@
 
 #include <cstring>
 #include <queue>
+#include <string>
 
 namespace mga {
-template<cpl::pixel Pixel>
+template<typename Ty>
+concept feed = requires(Ty a) {
+  typename Ty::image_type;
+  typename Ty::allocator_type;
+
+  { a.has_more() }
+  noexcept->std::same_as<bool>;
+
+  { a.produce(std::declval<typename Ty::allocator_type>()) }
+  ->std::same_as<typename Ty::image_type>;
+};
+
 class generator {
 public:
+  static inline constexpr std::uint8_t color_depth{16};
+
+  template<typename Ty>
+  using allocator_t = std::allocator<Ty>;
+
+  using image_type = mrl::matrix<cpl::nat_cc, allocator_t<cpl::nat_cc>>;
+
+  using fragment_t = fgm::fragment<color_depth, cpl::nat_cc>;
+
+private:
+  static inline constexpr std::size_t grid_horizontal{4};
+  static inline constexpr std::size_t grid_vertical{2};
+  static inline constexpr std::size_t grid_overlap{16};
+
+  struct match_config {
+    using allocator_type = allocator_t<char>;
+    static constexpr std::size_t weight_switch{10};
+    static constexpr std::size_t region_votes{3};
+
+    inline explicit match_config(
+        allocator_type const& alloc = allocator_type{}) noexcept
+        : allocator_{alloc} {
+    }
+
+    [[nodiscard]] inline allocator_type get_allocator() const noexcept {
+      return allocator_;
+    }
+
+    [[no_unique_address]] allocator_type allocator_;
+  };
+
+  using grid_type =
+      kpr::grid<grid_horizontal, grid_vertical, allocator_t<char>>;
+  using keypoint_extractor_t = kpe::extractor<grid_type, grid_overlap>;
+
+public:
+  generator(mrl::size_type width, mrl::size_type height)
+      : extractor_{width, height}
+      , current_{width, height} {
+  }
+
+  template<typename Feed>
+  void process(Feed&& f) requires(feed<std::decay_t<Feed>>) {
+    match_config match_cfg{};
+
+    if (f.has_more()) {
+      auto image{f.produce(match_cfg.allocator_)};
+
+      image_type median{image.width(), image.height()};
+      auto previous{extractor_.extract(image, median)};
+
+      std::int32_t x{0}, y{0};
+      current_.blit(x, y, image);
+
+      while (f.has_more()) {
+        image = f.produce(match_cfg.allocator_);
+
+        auto current{extractor_.extract(image, median)};
+        if (auto off{kpm::match(match_cfg, previous, current)}; off) {
+          x += std::get<0>(*off);
+          y += std::get<1>(*off);
+
+          current_.blit(x, y, image);
+        }
+        else {
+          break;
+        }
+
+        previous = std::move(current);
+      }
+    }
+  }
+
+  [[nodiscard]] fragment_t const& current() const noexcept {
+    return current_;
+  }
+
+private:
+  keypoint_extractor_t extractor_;
+  fragment_t current_;
 };
 } // namespace mga
 
@@ -80,15 +172,63 @@ void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
   png::write(ddir / filename, image.width(), image.height(), image.data());
 }
 
+class file_feed {
+public:
+  using image_type = mga::generator::image_type;
+  using allocator_type = image_type::allocator_type;
+
+private:
+  using vector_type = std::vector<std::filesystem::path>;
+
+public:
+  explicit file_feed(std::filesystem::path const& root) {
+    using namespace std::filesystem;
+    std::copy(
+        directory_iterator(root), directory_iterator(), back_inserter(files_));
+    std::sort(files_.begin(), files_.end(), [](auto& a, auto& b) {
+      return std::stoi(a.filename().string()) <
+             std::stoi(b.filename().string());
+    });
+
+    files_.resize(100);
+
+    next_ = files_.begin();
+  }
+
+  [[nodiscard]] inline bool has_more() const noexcept {
+    return next_ != files_.end();
+  }
+
+  [[nodiscard]] inline image_type produce(allocator_type alloc) {
+    auto current{next_++};
+
+    mrl::matrix<cpl::nat_cc, allocator_type> temp{screen_width, screen_height};
+
+    std::ifstream input;
+    input.open(*current, std::ios::in | std::ios::binary);
+    if (!input.is_open()) {
+      return temp;
+    }
+
+    input.read(reinterpret_cast<char*>(temp.data()),
+               static_cast<std::size_t>(temp.width()) * temp.height());
+    input.close();
+
+    return temp.crop(31, 53, 55, 105);
+  }
+
+private:
+  vector_type files_;
+  vector_type::iterator next_;
+};
+
 int main() {
   constexpr std::size_t perf_loops{1000};
 
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
-  using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>,
-                               16,
-                               std::allocator<char>>;
+  using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>, 16>;
 
   kpe_t extractor1{image1.width(), image1.height()};
   kpe_t extractor2{image1.width(), image1.height()};
@@ -214,6 +354,15 @@ int main() {
   write_rgb("motion_v.png", rgb_mv);
 
   write_rgb("merged.png", rgb_g);
+
+  mga::generator gen{image1.width(), image1.height()};
+
+  file_feed feed(ddir / "seq");
+  gen.process(feed);
+  auto map{gen.current().generate()};
+
+  auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("map.png", rgb_mp);
 
   return 0;
 }
