@@ -63,15 +63,14 @@ namespace details {
   }
 } // namespace details
 
-template<kpr::gridlike Grid, std::size_t Overlap, typename Alloc>
+template<kpr::gridlike Grid, std::size_t Overlap>
 class extractor {
 public:
   using grid_type = Grid;
-  using allocator_type = Alloc;
 
-  using matrix_type =
-      mrl::matrix<cpl::nat_cc,
-                  all::rebind_alloc_t<allocator_type, cpl::nat_cc>>;
+  using matrix_type = mrl::matrix<
+      cpl::nat_cc,
+      all::rebind_alloc_t<typename grid_type::allocator_type, cpl::nat_cc>>;
 
 private:
   template<typename Outer, typename Inner>
@@ -80,20 +79,17 @@ private:
   inline static constexpr auto reg_overlap{Overlap};
 
 public:
-  inline extractor(mrl::size_type width,
-                   mrl::size_type height,
-                   allocator_type const& alloc = allocator_type{})
+  inline extractor(mrl::size_type width, mrl::size_type height)
       : temp_{width, height}
       , reg_width_{width / grid_type::width - reg_overlap / 2}
       , reg_height_{height / grid_type::height - reg_overlap / 2}
       , reg_excl_stride_{height * reg_width_}
-      , reg_mid_stride_{height * reg_overlap}
-      , allocator_{alloc} {
+      , reg_mid_stride_{height * reg_overlap} {
   }
 
   [[nodiscard]] grid_type extract(matrix_type const& image,
                                   matrix_type& median) {
-    grid_type grid{allocator_};
+    grid_type grid{image.get_allocator()};
 
     auto tmp = temp_.data();
     for (auto row{image.data()}, last{image.end()}; row < last;
@@ -405,8 +401,6 @@ private:
 
   std::size_t reg_excl_stride_;
   std::size_t reg_mid_stride_;
-
-  allocator_type allocator_;
 };
 
 } // namespace kpe

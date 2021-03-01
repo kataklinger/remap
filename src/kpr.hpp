@@ -183,6 +183,8 @@ private:
 
 template<typename Ty>
 concept gridlike = requires(Ty g) {
+  typename Ty::allocator_type;
+
   requires std::unsigned_integral<decltype(Ty::width)>;
   requires Ty::width > 0;
 

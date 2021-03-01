@@ -113,6 +113,10 @@ public:
     return output;
   }
 
+  inline allocator_type get_allocator() const noexcept {
+    return data_.get_allocator();
+  }
+
 private:
   size_type width_;
   size_type height_;
