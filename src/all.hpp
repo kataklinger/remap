@@ -9,12 +9,17 @@ using rebind_alloc_t =
     typename std::allocator_traits<Alloc>::template rebind_alloc<Ty>;
 
 class memory_pool {
+private:
+  static constexpr auto header_size{sizeof(char*)};
+
 public:
   inline memory_pool() noexcept {
   }
 
   inline explicit memory_pool(std::size_t preallocated) {
-    extend(preallocated);
+    if (preallocated != 0) {
+      extend(preallocated);
+    }
   }
 
   inline memory_pool(memory_pool&& other) noexcept
@@ -27,16 +32,16 @@ public:
     other.total_used_ = 0;
     other.current_size_ = 0;
     other.current_used_ = 0;
-    other.current_ = 0;
+    other.current_ = nullptr;
   }
 
   ~memory_pool() {
-    for (auto current{current_}; current_ != nullptr;) {
-      current_ -= sizeof(char*);
+    for (auto current{current_}; current != nullptr;) {
+      current -= header_size;
 
       auto next{*reinterpret_cast<char**>(current)};
       delete[] current;
-      current_ = next;
+      current = next;
     }
   }
 
@@ -51,7 +56,7 @@ public:
 
   [[nodiscard]] char* get(std::size_t size, std::size_t align) {
     if (size > current_size_ - current_used_) {
-      extend(std::max(size, total_allocated_ >> 1));
+      extend(std::max(size + align, total_allocated_ >> 1));
     }
 
     current_used_ += reinterpret_cast<std::uintptr_t>(current_) % align;
@@ -77,10 +82,10 @@ public:
 
 private:
   void extend(std::size_t size) {
-    auto block{new char[size]};
+    auto block{new char[size + header_size]};
 
     new (block) char*(current_);
-    current_ = block + sizeof(char*);
+    current_ = block + header_size;
 
     total_allocated_ += size;
     current_size_ = size;
@@ -101,6 +106,9 @@ template<typename Ty>
 class frame_allocator {
 public:
   using value_type = Ty;
+
+  using propagate_on_container_move_assignment = std::true_type;
+  using propagate_on_container_swap = std::true_type;
 
 public:
   inline explicit frame_allocator(memory_pool& pool) noexcept

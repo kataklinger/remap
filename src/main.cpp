@@ -77,35 +77,28 @@ public:
       all::memory_pool ppool{0};
       allocator_t<char> palloc{ppool};
 
-      auto pimage{f.produce(palloc)};
-
-      image_type pmedian{pimage.width(), pimage.height(), palloc};
-      auto pkeypoints{extractor_.extract(pimage, pmedian)};
-
-      std::int32_t x{0}, y{0};
-      current_.blit(x, y, pimage);
-
-      while (f.has_more()) {
+      auto pkeys{get_first(f, palloc)};
+      for (std::int32_t x{0}, y{0}; f.has_more();) {
         all::memory_pool cpool{ppool.total_used() << 1};
         allocator_t<char> calloc{cpool};
+        {
+          auto cimage{f.produce(calloc)};
 
-        auto cimage{f.produce(calloc)};
+          image_type cmedian{cimage.width(), cimage.height(), calloc};
+          auto ckeys{extractor_.extract(cimage, cmedian)};
 
-        image_type cmedian{pimage.width(), pimage.height(), palloc};
-        auto ckeypoints{extractor_.extract(cimage, cmedian)};
+          if (auto off{kpm::match(match_config{calloc}, pkeys, ckeys)}; off) {
+            x += std::get<0>(*off);
+            y += std::get<1>(*off);
 
-        if (auto off{kpm::match(match_config{calloc}, pkeypoints, ckeypoints)};
-            off) {
-          x += std::get<0>(*off);
-          y += std::get<1>(*off);
+            current_.blit(x, y, cimage);
+          }
+          else {
+            break;
+          }
 
-          current_.blit(x, y, cimage);
+          pkeys = std::move(ckeys);
         }
-        else {
-          break;
-        }
-
-        pkeypoints = std::move(ckeypoints);
         ppool = std::move(cpool);
       }
     }
@@ -113,6 +106,16 @@ public:
 
   [[nodiscard]] fragment_t const& current() const noexcept {
     return current_;
+  }
+
+private:
+  template<typename Feed>
+  auto get_first(Feed&& f, allocator_t<char>& alloc) {
+    auto image{f.produce(alloc)};
+    current_.blit(0, 0, image);
+
+    image_type median{image.width(), image.height(), alloc};
+    return extractor_.extract(image, median);
   }
 
 private:
