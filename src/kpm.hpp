@@ -63,7 +63,7 @@ namespace details {
   }
 
   template<bool Switch, match_config Cfg, typename Region>
-  [[nodiscard]] totalizator_t<Cfg> count_offsets(Cfg& config,
+  [[nodiscard]] totalizator_t<Cfg> count_offsets(Cfg const& config,
                                                  Region const& previous,
                                                  Region const& current) {
     totalizator_t<Cfg> total{config.get_allocator()};
@@ -85,7 +85,7 @@ namespace details {
   }
 
   template<match_config Cfg>
-  [[nodiscard]] ticket_t<Cfg> top_offsets(Cfg& config,
+  [[nodiscard]] ticket_t<Cfg> top_offsets(Cfg const& config,
                                           totalizator_t<Cfg> const& total,
                                           std::size_t top) {
     ticket_t<Cfg> selected{top + 1, config.get_allocator()};
@@ -119,7 +119,7 @@ namespace details {
 
   template<match_config Cfg, typename Region, bool Switch>
   [[nodiscard]] inline ticket_t<Cfg>
-      vote_helper(Cfg& config,
+      vote_helper(Cfg const& config,
                   Region const& previous,
                   Region const& current,
                   std::bool_constant<Switch> /*unused*/) {
@@ -130,7 +130,7 @@ namespace details {
 
   template<match_config Cfg, typename Region>
   [[nodiscard]] inline ticket_t<Cfg>
-      vote(Cfg& config, Region const& previous, Region const& current) {
+      vote(Cfg const& config, Region const& previous, Region const& current) {
     return previous.counts()[2] < Cfg::weight_switch ||
                    current.counts()[2] <= Cfg::weight_switch
                ? vote_helper(config, previous, current, std::true_type{})
@@ -173,7 +173,7 @@ template<match_config Cfg,
          std::size_t Width,
          std::size_t Height>
 [[nodiscard]] std::optional<cdt::offset_t>
-    match(Cfg& config,
+    match(Cfg const& config,
           kpr::grid<Width, Height, Alloc> const& previous,
           kpr::grid<Width, Height, Alloc> const& current) {
   using namespace details;

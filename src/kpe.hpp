@@ -142,9 +142,7 @@ private:
     }
   }
 
-  void col_out(mrl::matrix<cpl::nat_cc> const& image,
-               mrl::matrix<cpl::nat_cc>& median,
-               grid_type& grid) {
+  void col_out(matrix_type const& image, matrix_type& median, grid_type& grid) {
     auto start{image.data() + image.width() * kernel_half};
     auto raw{start + kernel_half};
     auto out{median.data() + (median.width() + 1) * kernel_half};

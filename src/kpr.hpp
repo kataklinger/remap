@@ -108,8 +108,12 @@ public:
   using count_store = std::array<std::size_t, max_weight>;
 
 public:
-  inline explicit region(allocator_type const& alloc = allocator_type{})
+  inline region(allocator_type const& alloc)
       : points_{points_alloc_t{alloc}} {
+  }
+
+  inline region()
+      : region(allocator_type{}) {
   }
 
   inline void add(code const& key, point const& pt) {
@@ -149,14 +153,26 @@ public:
 
   using regions_t = std::span<region_type const, region_count>;
 
+private:
+  template<std::size_t... Idxs>
+  inline explicit grid(allocator_type const& alloc,
+                       std::integer_sequence<std::size_t, Idxs...> /* unused */)
+      : regions_{(Idxs, region_type{alloc})...} {
+  }
+
 public:
-  inline explicit grid(allocator_type const& alloc = allocator_type{}) {
-    std::uninitialized_fill_n(regions_, region_count, region_type{alloc});
+  inline explicit grid(allocator_type const& alloc)
+      : grid(alloc, std::make_index_sequence<region_count>{}) {
+  }
+
+  inline grid()
+      : grid(allocator_type{}) {
   }
 
   template<std::size_t... Idxs>
-  inline void
-      add(code const& key, point pt, std::index_sequence<Idxs...> /**/) {
+  inline void add(code const& key,
+                  point pt,
+                  std::index_sequence<Idxs...> /* unused */) {
     add_intern(key, pt, std::integral_constant<std::size_t, Idxs>{}...);
   }
 

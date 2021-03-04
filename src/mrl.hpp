@@ -14,13 +14,15 @@ public:
   using allocator_type = Alloc;
 
 public:
-  inline matrix(size_type width,
-                size_type height,
-                allocator_type const& alloc = allocator_type{})
+  inline matrix(size_type width, size_type height, allocator_type const& alloc)
       : width_{width}
       , height_{height}
       , data_{alloc} {
     data_.resize(width * height);
+  }
+
+  inline matrix(size_type width, size_type height)
+      : matrix(width, height, allocator_type{}) {
   }
 
   [[nodiscard]] inline value_type& operator[](size_type index) noexcept {

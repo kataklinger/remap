@@ -34,7 +34,7 @@ public:
   static inline constexpr std::uint8_t color_depth{16};
 
   template<typename Ty>
-  using allocator_t = std::allocator<Ty>;
+  using allocator_t = all::frame_allocator<Ty>;
 
   using image_type = mrl::matrix<cpl::nat_cc, allocator_t<cpl::nat_cc>>;
 
@@ -50,8 +50,7 @@ private:
     static constexpr std::size_t weight_switch{10};
     static constexpr std::size_t region_votes{3};
 
-    inline explicit match_config(
-        allocator_type const& alloc = allocator_type{}) noexcept
+    inline explicit match_config(allocator_type const& alloc) noexcept
         : allocator_{alloc} {
     }
 
@@ -74,32 +73,40 @@ public:
 
   template<typename Feed>
   void process(Feed&& f) requires(feed<std::decay_t<Feed>>) {
-    match_config match_cfg{};
-
     if (f.has_more()) {
-      auto image{f.produce(match_cfg.allocator_)};
+      all::memory_pool ppool{0};
+      allocator_t<char> palloc{ppool};
 
-      image_type median{image.width(), image.height()};
-      auto previous{extractor_.extract(image, median)};
+      auto pimage{f.produce(palloc)};
+
+      image_type pmedian{pimage.width(), pimage.height(), palloc};
+      auto pkeypoints{extractor_.extract(pimage, pmedian)};
 
       std::int32_t x{0}, y{0};
-      current_.blit(x, y, image);
+      current_.blit(x, y, pimage);
 
       while (f.has_more()) {
-        image = f.produce(match_cfg.allocator_);
+        all::memory_pool cpool{ppool.total_used() << 1};
+        allocator_t<char> calloc{cpool};
 
-        auto current{extractor_.extract(image, median)};
-        if (auto off{kpm::match(match_cfg, previous, current)}; off) {
+        auto cimage{f.produce(calloc)};
+
+        image_type cmedian{pimage.width(), pimage.height(), palloc};
+        auto ckeypoints{extractor_.extract(cimage, cmedian)};
+
+        if (auto off{kpm::match(match_config{calloc}, pkeypoints, ckeypoints)};
+            off) {
           x += std::get<0>(*off);
           y += std::get<1>(*off);
 
-          current_.blit(x, y, image);
+          current_.blit(x, y, cimage);
         }
         else {
           break;
         }
 
-        previous = std::move(current);
+        pkeypoints = std::move(ckeypoints);
+        ppool = std::move(cpool);
       }
     }
   }
@@ -202,7 +209,8 @@ public:
   [[nodiscard]] inline image_type produce(allocator_type alloc) {
     auto current{next_++};
 
-    mrl::matrix<cpl::nat_cc, allocator_type> temp{screen_width, screen_height};
+    mrl::matrix<cpl::nat_cc, allocator_type> temp{
+        screen_width, screen_height, alloc};
 
     std::ifstream input;
     input.open(*current, std::ios::in | std::ios::binary);

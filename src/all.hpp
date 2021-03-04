@@ -7,4 +7,134 @@ namespace all {
 template<typename Alloc, typename Ty>
 using rebind_alloc_t =
     typename std::allocator_traits<Alloc>::template rebind_alloc<Ty>;
-}
+
+class memory_pool {
+public:
+  inline memory_pool() noexcept {
+  }
+
+  inline explicit memory_pool(std::size_t preallocated) {
+    extend(preallocated);
+  }
+
+  inline memory_pool(memory_pool&& other) noexcept
+      : total_allocated_{other.total_allocated_}
+      , total_used_{other.total_used_}
+      , current_size_{other.current_size_}
+      , current_used_{other.current_used_}
+      , current_{other.current_} {
+    other.total_allocated_ = 0;
+    other.total_used_ = 0;
+    other.current_size_ = 0;
+    other.current_used_ = 0;
+    other.current_ = 0;
+  }
+
+  ~memory_pool() {
+    for (auto current{current_}; current_ != nullptr;) {
+      current_ -= sizeof(char*);
+
+      auto next{*reinterpret_cast<char**>(current)};
+      delete[] current;
+      current_ = next;
+    }
+  }
+
+  inline memory_pool& operator=(memory_pool&& rhs) noexcept {
+    memory_pool tmp{std::move(rhs)};
+    tmp.swap(*this);
+    return *this;
+  }
+
+  memory_pool(memory_pool const&) = delete;
+  memory_pool& operator=(memory_pool const&) = delete;
+
+  [[nodiscard]] char* get(std::size_t size, std::size_t align) {
+    if (size > current_size_ - current_used_) {
+      extend(std::max(size, total_allocated_ >> 1));
+    }
+
+    current_used_ += reinterpret_cast<std::uintptr_t>(current_) % align;
+
+    auto result{current_ + current_used_};
+    current_used_ += size;
+    total_used_ += size;
+
+    return result;
+  }
+
+  [[nodiscard]] inline std::size_t total_used() const noexcept {
+    return total_used_;
+  }
+
+  inline void swap(memory_pool& other) noexcept {
+    std::swap(total_allocated_, other.total_allocated_);
+    std::swap(total_used_, other.total_used_);
+    std::swap(current_size_, other.current_size_);
+    std::swap(current_used_, other.current_used_);
+    std::swap(current_, other.current_);
+  }
+
+private:
+  void extend(std::size_t size) {
+    auto block{new char[size]};
+
+    new (block) char*(current_);
+    current_ = block + sizeof(char*);
+
+    total_allocated_ += size;
+    current_size_ = size;
+    current_used_ = 0;
+  }
+
+private:
+  std::size_t total_allocated_{0};
+  std::size_t total_used_{0};
+
+  std::size_t current_size_{0};
+  std::size_t current_used_{0};
+
+  char* current_{nullptr};
+};
+
+template<typename Ty>
+class frame_allocator {
+public:
+  using value_type = Ty;
+
+public:
+  inline explicit frame_allocator(memory_pool& pool) noexcept
+      : pool_{&pool} {
+  }
+
+  template<typename Tx>
+  inline frame_allocator(frame_allocator<Tx> const& other) noexcept
+      : pool_{other.pool_} {
+  }
+
+  [[nodiscard]] inline value_type* allocate(std::size_t count) {
+    return reinterpret_cast<value_type*>(
+        pool_->get(count * sizeof(value_type), alignof(value_type)));
+  }
+
+  inline void deallocate(value_type* ptr, std::size_t count) const noexcept {
+  }
+
+  inline [[nodiscard]] bool
+      operator==(frame_allocator const& rhs) const noexcept {
+    return pool_ == rhs.pool_;
+  }
+
+  inline [[nodiscard]] bool
+      operator!=(frame_allocator const& rhs) const noexcept {
+    return !(*this == rhs);
+  }
+
+private:
+  memory_pool* pool_;
+
+  template<typename Tx>
+  friend class frame_allocator;
+};
+
+} // namespace all
