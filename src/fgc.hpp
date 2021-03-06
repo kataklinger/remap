@@ -3,6 +3,7 @@
 
 #include "all.hpp"
 #include "fgm.hpp"
+#include "ifd.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "kpr.hpp"
@@ -10,18 +11,6 @@
 #include <list>
 
 namespace fgc {
-template<typename Ty>
-concept feeder = requires(Ty a) {
-  typename Ty::image_type;
-  typename Ty::allocator_type;
-
-  { a.has_more() }
-  noexcept->std::same_as<bool>;
-
-  { a.produce(std::declval<typename Ty::allocator_type>()) }
-  ->std::same_as<typename Ty::image_type>;
-};
-
 class collector {
 public:
   static inline constexpr std::uint8_t color_depth{16};
@@ -65,7 +54,7 @@ public:
   }
 
   template<typename Feeder>
-  void collect(Feeder&& feed) requires(feeder<std::decay_t<Feeder>>) {
+  void collect(Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
     if (feed.has_more()) {
       all::memory_pool ppool{0};
 
