@@ -1,4 +1,6 @@
 
+#pragma once
+
 #include "cpl.hpp"
 #include "mrl.hpp"
 

@@ -1,5 +1,6 @@
 ﻿
 #include "cte.hpp"
+#include "fgc.hpp"
 #include "fgm.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
@@ -15,114 +16,6 @@
 #include <cstring>
 #include <queue>
 #include <string>
-
-namespace mga {
-template<typename Ty>
-concept feed = requires(Ty a) {
-  typename Ty::image_type;
-  typename Ty::allocator_type;
-
-  { a.has_more() }
-  noexcept->std::same_as<bool>;
-
-  { a.produce(std::declval<typename Ty::allocator_type>()) }
-  ->std::same_as<typename Ty::image_type>;
-};
-
-class generator {
-public:
-  static inline constexpr std::uint8_t color_depth{16};
-
-  template<typename Ty>
-  using allocator_t = all::frame_allocator<Ty>;
-
-  using image_type = mrl::matrix<cpl::nat_cc, allocator_t<cpl::nat_cc>>;
-
-  using fragment_t = fgm::fragment<color_depth, cpl::nat_cc>;
-
-private:
-  static inline constexpr std::size_t grid_horizontal{4};
-  static inline constexpr std::size_t grid_vertical{2};
-  static inline constexpr std::size_t grid_overlap{16};
-
-  struct match_config {
-    using allocator_type = allocator_t<char>;
-    static constexpr std::size_t weight_switch{10};
-    static constexpr std::size_t region_votes{3};
-
-    inline explicit match_config(allocator_type const& alloc) noexcept
-        : allocator_{alloc} {
-    }
-
-    [[nodiscard]] inline allocator_type get_allocator() const noexcept {
-      return allocator_;
-    }
-
-    [[no_unique_address]] allocator_type allocator_;
-  };
-
-  using grid_type =
-      kpr::grid<grid_horizontal, grid_vertical, allocator_t<char>>;
-  using keypoint_extractor_t = kpe::extractor<grid_type, grid_overlap>;
-
-public:
-  generator(mrl::size_type width, mrl::size_type height)
-      : extractor_{width, height}
-      , current_{width, height} {
-  }
-
-  template<typename Feed>
-  void process(Feed&& f) requires(feed<std::decay_t<Feed>>) {
-    if (f.has_more()) {
-      all::memory_pool ppool{0};
-      allocator_t<char> palloc{ppool};
-
-      auto pkeys{get_first(f, palloc)};
-      for (std::int32_t x{0}, y{0}; f.has_more();) {
-        all::memory_pool cpool{ppool.total_used() << 1};
-        allocator_t<char> calloc{cpool};
-        {
-          auto cimage{f.produce(calloc)};
-
-          image_type cmedian{cimage.width(), cimage.height(), calloc};
-          auto ckeys{extractor_.extract(cimage, cmedian)};
-
-          if (auto off{kpm::match(match_config{calloc}, pkeys, ckeys)}; off) {
-            x += std::get<0>(*off);
-            y += std::get<1>(*off);
-
-            current_.blit(x, y, cimage);
-          }
-          else {
-            break;
-          }
-
-          pkeys = std::move(ckeys);
-        }
-        ppool = std::move(cpool);
-      }
-    }
-  }
-
-  [[nodiscard]] fragment_t const& current() const noexcept {
-    return current_;
-  }
-
-private:
-  template<typename Feed>
-  auto get_first(Feed&& f, allocator_t<char>& alloc) {
-    auto image{f.produce(alloc)};
-    current_.blit(0, 0, image);
-
-    image_type median{image.width(), image.height(), alloc};
-    return extractor_.extract(image, median);
-  }
-
-private:
-  keypoint_extractor_t extractor_;
-  fragment_t current_;
-};
-} // namespace mga
 
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
@@ -184,7 +77,7 @@ void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
 
 class file_feed {
 public:
-  using image_type = mga::generator::image_type;
+  using image_type = fgc::collector::image_type;
   using allocator_type = image_type::allocator_type;
 
 private:
@@ -366,11 +259,9 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  mga::generator gen{image1.width(), image1.height()};
-
-  file_feed feed(ddir / "seq");
-  gen.process(feed);
-  auto map{gen.current().generate()};
+  fgc::collector collector{image1.width(), image1.height()};
+  collector.collect(file_feed{ddir / "seq"});
+  auto map{collector.current().generate()};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("map.png", rgb_mp);

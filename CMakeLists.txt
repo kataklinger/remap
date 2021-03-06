@@ -18,7 +18,7 @@ add_executable (remap
 	"src/mod.hpp"
 	"src/fgm.hpp"
 	"src/pngu.hpp"
-	"src/main.cpp")
+	"src/main.cpp" "src/fgc.hpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)
