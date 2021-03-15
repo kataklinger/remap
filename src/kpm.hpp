@@ -27,23 +27,23 @@ concept match_config = requires(Ty cfg) {
   ->std::convertible_to<typename Ty::allocator_type>;
 };
 
+template<match_config Cfg, typename Ty>
+using get_allocator = all::rebind_alloc_t<typename Cfg::allocator_type, Ty>;
+
+using vote_t = std::tuple<cdt::offset_t, std::size_t>;
+
+template<match_config Cfg>
+using ticket_t = std::vector<vote_t, get_allocator<Cfg, vote_t>>;
+
+template<match_config Cfg>
+using totalizator_t = std::unordered_map<
+    cdt::offset_t,
+    std::size_t,
+    cdt::offset_hash,
+    std::equal_to<cdt::offset_t>,
+    get_allocator<Cfg, std::pair<const cdt::offset_t, std::size_t>>>;
+
 namespace details {
-  template<match_config Cfg, typename Ty>
-  using get_allocator = all::rebind_alloc_t<typename Cfg::allocator_type, Ty>;
-
-  template<match_config Cfg>
-  using totalizator_t = std::unordered_map<
-      cdt::offset_t,
-      std::size_t,
-      cdt::offset_hash,
-      std::equal_to<cdt::offset_t>,
-      get_allocator<Cfg, std::pair<const cdt::offset_t, std::size_t>>>;
-
-  using vote_t = std::tuple<cdt::offset_t, std::size_t>;
-
-  template<match_config Cfg>
-  using ticket_t = std::vector<vote_t, get_allocator<Cfg, vote_t>>;
-
   template<match_config Cfg>
   using collector_t =
       std::vector<ticket_t<Cfg>, get_allocator<Cfg, ticket_t<Cfg>>>;
@@ -119,22 +119,13 @@ namespace details {
 
   template<match_config Cfg, typename Region, bool Switch>
   [[nodiscard]] inline ticket_t<Cfg>
-      vote_helper(Cfg const& config,
-                  Region const& previous,
-                  Region const& current,
-                  std::bool_constant<Switch> /*unused*/) {
+      vote_impl(Cfg const& config,
+                Region const& previous,
+                Region const& current,
+                std::bool_constant<Switch> /*unused*/) {
     return top_offsets(config,
                        count_offsets<Switch>(config, previous, current),
                        Cfg::region_votes);
-  }
-
-  template<match_config Cfg, typename Region>
-  [[nodiscard]] inline ticket_t<Cfg>
-      vote(Cfg const& config, Region const& previous, Region const& current) {
-    return previous.counts()[2] < Cfg::weight_switch ||
-                   current.counts()[2] <= Cfg::weight_switch
-               ? vote_helper(config, previous, current, std::true_type{})
-               : vote_helper(config, previous, current, std::false_type{});
   }
 
   template<match_config Cfg>
@@ -167,6 +158,15 @@ namespace details {
   }
 
 } // namespace details
+
+template<match_config Cfg, typename Region>
+[[nodiscard]] inline ticket_t<Cfg>
+    vote(Cfg const& config, Region const& previous, Region const& current) {
+  return previous.counts()[2] < Cfg::weight_switch ||
+                 current.counts()[2] <= Cfg::weight_switch
+             ? details::vote_impl(config, previous, current, std::true_type{})
+             : details::vote_impl(config, previous, current, std::false_type{});
+}
 
 template<match_config Cfg,
          typename Alloc,
