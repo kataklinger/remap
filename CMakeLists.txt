@@ -19,6 +19,7 @@ add_executable (remap
 	"src/fgm.hpp"
 	"src/main.cpp"
 	"src/fgc.hpp"
+	"src/fgs.hpp"
 	"src/ifd.hpp"
 	"src/pngu.hpp")
 

@@ -2,6 +2,7 @@
 #include "cte.hpp"
 #include "fgc.hpp"
 #include "fgm.hpp"
+#include "fgs.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
@@ -20,7 +21,7 @@
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
 
-inline uint64_t now() {
+inline std::uint64_t now() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
@@ -93,7 +94,7 @@ public:
              std::stoi(b.filename().string());
     });
 
-    files_.resize(100);
+    files_.resize(5000);
 
     next_ = files_.begin();
   }
@@ -104,6 +105,20 @@ public:
 
   [[nodiscard]] inline image_type produce(allocator_type alloc) {
     auto current{next_++};
+
+    auto count = current - files_.begin();
+    if (count % 100 == 0) {
+      auto this_time_{now()};
+      if (last_time_ > 0) {
+        std::cout << "#" << count << " ~ " << this_time_ - last_time_ << " @ "
+                  << this_time_ - start_time_ << std::endl;
+      }
+      else {
+        start_time_ = this_time_;
+      }
+
+      last_time_ = this_time_;
+    }
 
     mrl::matrix<cpl::nat_cc, allocator_type> temp{
         screen_width, screen_height, alloc};
@@ -124,6 +139,9 @@ public:
 private:
   vector_type files_;
   vector_type::iterator next_;
+
+  std::uint64_t start_time_{0};
+  std::uint64_t last_time_{0};
 };
 
 int main() {
@@ -262,6 +280,10 @@ int main() {
   fgc::collector collector{image1.width(), image1.height()};
   collector.collect(file_feed{ddir / "seq"});
   auto map{collector.current().generate()};
+
+  auto& fragments{collector.fragments()};
+  auto spliced{fgs::splice<fgc::collector::color_depth>(fragments.begin(),
+                                                        fragments.end())};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("map.png", rgb_mp);
