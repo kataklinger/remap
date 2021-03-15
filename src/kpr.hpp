@@ -180,6 +180,14 @@ public:
     return regions_;
   }
 
+  inline region_type& operator[](std::size_t index) noexcept {
+    return regions_[index];
+  }
+
+  inline region_type const& operator[](std::size_t index) const noexcept {
+    return regions_[index];
+  }
+
 private:
   template<typename... Idxs>
   inline void add_intern(code const& key, point pt, Idxs... idxs) {
