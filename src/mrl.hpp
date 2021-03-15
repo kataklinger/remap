@@ -14,6 +14,16 @@ public:
   using allocator_type = Alloc;
 
 public:
+  inline matrix() noexcept
+      : matrix(allocator_type{}) {
+  }
+
+  inline explicit matrix(allocator_type const& alloc) noexcept
+      : width_{0}
+      , height_{0}
+      , data_{alloc} {
+  }
+
   inline matrix(size_type width, size_type height, allocator_type const& alloc)
       : width_{width}
       , height_{height}
