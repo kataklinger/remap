@@ -8,6 +8,7 @@
 #include "kpm.hpp"
 #include "kpr.hpp"
 
+#include <execution>
 #include <list>
 
 namespace fgc {
@@ -67,8 +68,12 @@ public:
     }
   }
 
-  [[nodiscard]] fragment_t const& current() const noexcept {
+  [[nodiscard]] inline fragment_t const& current() const noexcept {
     return *current_;
+  }
+
+  [[nodiscard]] inline fragment_list const& fragments() const noexcept {
+    return fragments_;
   }
 
 private:
