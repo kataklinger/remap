@@ -50,8 +50,8 @@ private:
   using keypoint_extractor_t = kpe::extractor<grid_type, grid_overlap>;
 
 public:
-  collector(mrl::size_type width, mrl::size_type height)
-      : extractor_{width, height} {
+  collector(mrl::dimensions_t dimensions)
+      : extractor_{dimensions} {
   }
 
   template<typename Feeder>
@@ -81,11 +81,11 @@ private:
   auto process_init(Feed&& feed, allocator_t<char> const& alloc) {
     auto image{feed.produce(alloc)};
 
-    add_fragment(image.width(), image.height());
+    add_fragment(image.dimensions());
 
     blit(image);
 
-    image_type median{image.width(), image.height(), alloc};
+    image_type median{image.dimensions(), alloc};
     return extractor_.extract(image, median);
   }
 
@@ -95,15 +95,15 @@ private:
                      allocator_t<char> const& alloc) {
     auto image{feed.produce(alloc)};
 
-    image_type median{image.width(), image.height(), alloc};
+    image_type median{image.dimensions(), alloc};
     auto keys{extractor_.extract(image, median)};
 
     if (auto off{kpm::match(match_config{alloc}, previous, keys)}; off) {
-      x_ += std::get<0>(*off);
-      y_ += std::get<1>(*off);
+      position_.x_ += off->x_;
+      position_.y_ += off->y_;
     }
     else {
-      add_fragment(image.width(), image.height());
+      add_fragment(image.dimensions());
     }
 
     blit(image);
@@ -111,20 +111,19 @@ private:
     return keys;
   }
 
-  inline void add_fragment(mrl::size_type width, mrl::size_type height) {
-    current_ = &fragments_.emplace_back(width, height);
-    x_ = y_ = 0;
+  inline void add_fragment(mrl::dimensions_t dimension) {
+    current_ = &fragments_.emplace_back(dimension);
+    position_.x_ = position_.y_ = 0;
   }
 
   inline void blit(image_type const& image) noexcept {
-    current_->blit(x_, y_, image);
+    current_->blit(position_, image);
   }
 
 private:
   keypoint_extractor_t extractor_;
 
-  std::int32_t x_{0};
-  std::int32_t y_{0};
+  fgm::point_t position_{};
 
   fragment_list fragments_;
   fragment_t* current_{nullptr};

@@ -7,6 +7,7 @@
 #include <concepts>
 #include <cstddef>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <type_traits>
 #include <unordered_map>
@@ -17,7 +18,6 @@ static inline constexpr uint8_t code_length = 13;
 static inline constexpr uint8_t code_max_index = code_length - 1;
 
 using code = std::array<std::byte, code_length>;
-using point = std::tuple<mrl::size_type, mrl::size_type>;
 
 [[nodiscard]] inline std::byte weight(code const& value) noexcept {
   return value[code_max_index] & static_cast<std::byte>(0xf);
@@ -94,7 +94,7 @@ public:
 
   using allocator_type = Alloc;
 
-  using points_t = std::vector<point>;
+  using points_t = std::vector<mrl::point_t>;
 
   using points_alloc_t =
       all::rebind_alloc_t<allocator_type, std::pair<code const, points_t>>;
@@ -104,7 +104,6 @@ public:
                                           code_hash,
                                           std::equal_to<code>,
                                           points_alloc_t>;
-
   using count_store = std::array<std::size_t, max_weight>;
 
 public:
@@ -116,8 +115,8 @@ public:
       : region(allocator_type{}) {
   }
 
-  inline void add(code const& key, point const& pt) {
-    points_[key].push_back(pt);
+  inline void add(code const& key, mrl::point_t const& point) {
+    points_[key].push_back(point);
     ++weight_count_[static_cast<std::size_t>(weight(key))];
   }
 
@@ -131,6 +130,11 @@ public:
 
   [[nodiscard]] inline count_store const& counts() const noexcept {
     return weight_count_;
+  }
+
+  [[nodiscard]] inline std::size_t total_count() const noexcept {
+    return std::accumulate(
+        weight_count_.begin(), weight_count_.end(), std::size_t{});
   }
 
 private:
@@ -171,9 +175,9 @@ public:
 
   template<std::size_t... Idxs>
   inline void add(code const& key,
-                  point pt,
+                  mrl::point_t point,
                   std::index_sequence<Idxs...> /* unused */) {
-    add_intern(key, pt, std::integral_constant<std::size_t, Idxs>{}...);
+    add_intern(key, point, std::integral_constant<std::size_t, Idxs>{}...);
   }
 
   [[nodiscard]] inline regions_t regions() const noexcept {
@@ -190,15 +194,15 @@ public:
 
 private:
   template<typename... Idxs>
-  inline void add_intern(code const& key, point pt, Idxs... idxs) {
-    ((( void )add_intern(key, pt, idxs)), ...);
+  inline void add_intern(code const& key, mrl::point_t point, Idxs... idxs) {
+    ((( void )add_intern(key, point, idxs)), ...);
   }
 
   template<std::size_t Idx>
   inline void add_intern(code const& key,
-                         point pt,
+                         mrl::point_t point,
                          std::integral_constant<std::size_t, Idx> /*unused*/) {
-    regions_[Idx].add(key, pt);
+    regions_[Idx].add(key, point);
   }
 
 private:
@@ -216,7 +220,7 @@ concept gridlike = requires(Ty g) {
   requires Ty::height > 0;
 
   {g.add(std::declval<code&&>(),
-         std::declval<point&&>(),
+         std::declval<mrl::point_t&&>(),
          std::index_sequence<0>{})};
 };
 

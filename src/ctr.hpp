@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "cdt.hpp"
 #include "cpl.hpp"
 
 #include <optional>
@@ -86,85 +87,22 @@ private:
   std::uint32_t rep_;
 };
 
-namespace details {
-  struct limits {
-    inline limits() noexcept
-        : lower_{std::numeric_limits<std::size_t>::max()}
-        , upper_{0} {
-    }
-
-    inline limits(std::size_t lower, std::size_t upper) noexcept
-        : lower_{lower}
-        , upper_{upper} {
-    }
-
-    inline void update(std::size_t value) noexcept {
-      if (value > upper_) {
-        upper_ = value;
-      }
-      else if (value < lower_) {
-        lower_ = value;
-      }
-    }
-
-    [[nodiscard]] std::size_t size() const noexcept {
-      return upper_ - lower_;
-    }
-
-    std::size_t lower_;
-    std::size_t upper_;
-  };
-} // namespace details
-
-class box {
-public:
-  const box(details::limits const& horizontal,
-            details::limits const& vertical) noexcept
-      : horizontal_(horizontal)
-      , vertical_(vertical) {
-  }
-
-  [[nodiscard]] std::size_t left() const noexcept {
-    return horizontal_.lower_;
-  }
-
-  [[nodiscard]] std::size_t right() const noexcept {
-    return horizontal_.upper_;
-  }
-
-  [[nodiscard]] std::size_t width() const noexcept {
-    return horizontal_.size();
-  }
-
-  [[nodiscard]] std::size_t top() const noexcept {
-    return vertical_.lower_;
-  }
-
-  [[nodiscard]] std::size_t bottom() const noexcept {
-    return vertical_.upper_;
-  }
-
-  [[nodiscard]] std::size_t height() const noexcept {
-    return vertical_.size();
-  }
-
-private:
-  details::limits horizontal_;
-  details::limits vertical_;
-};
+using region_t = cdt::region<std::size_t>;
+using limits_t = cdt::limits<std::size_t>;
 
 namespace details {
   template<typename Edges>
-  [[nodiscard]] box get_enclosure(Edges const& edges,
-                                  std::size_t width) noexcept {
-    limits horizontal;
+  [[nodiscard]] region_t get_enclosure(Edges const& edges,
+                                       std::size_t width) noexcept {
+    limits_t horizontal;
     for (auto edge : edges) {
       horizontal.update(edge.position() % width);
     }
 
-    return {
-        horizontal,
-        {edges.front().position() / width, edges.back().position() / width}};
+    return {horizontal.lower_,
+            edges.front().position() / width,
+            horizontal.upper_,
+            edges.back().position() / width};
   }
 
   template<cpl::pixel Ty>
@@ -253,7 +191,7 @@ public:
     return id_;
   }
 
-  [[nodiscard]] inline box const& enclosure() const noexcept {
+  [[nodiscard]] inline region_t const& enclosure() const noexcept {
     if (!enclosure_) {
       sort();
       enclosure_ = details::get_enclosure(edges_, width_);
@@ -289,7 +227,7 @@ private:
   std::uint32_t perimeter_{0};
   std::uint32_t id_;
 
-  mutable std::optional<box> enclosure_;
+  mutable std::optional<region_t> enclosure_;
   mutable std::optional<pixel_type> color_;
 };
 

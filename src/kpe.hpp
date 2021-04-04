@@ -79,12 +79,12 @@ private:
   inline static constexpr auto reg_overlap{Overlap};
 
 public:
-  inline extractor(mrl::size_type width, mrl::size_type height)
-      : temp_{width, height}
-      , reg_width_{width / grid_type::width - reg_overlap / 2}
-      , reg_height_{height / grid_type::height - reg_overlap / 2}
-      , reg_excl_stride_{height * reg_width_}
-      , reg_mid_stride_{height * reg_overlap} {
+  inline extractor(mrl::dimensions_t dimensions)
+      : temp_{dimensions}
+      , reg_width_{dimensions.width_ / grid_type::width - reg_overlap / 2}
+      , reg_height_{dimensions.height_ / grid_type::height - reg_overlap / 2}
+      , reg_excl_stride_{dimensions.height_ * reg_width_}
+      , reg_mid_stride_{dimensions.height_ * reg_overlap} {
   }
 
   [[nodiscard]] grid_type extract(matrix_type const& image,
@@ -221,7 +221,7 @@ private:
       kpr::code code;
       encode_keypoint(raw, code.data(), weight);
       grid.add(code,
-               kpr::point{x, kernel_half},
+               mrl::point_t{x, kernel_half},
                explode_t<Outer, std::index_sequence<0>>{});
     }
 
@@ -296,7 +296,7 @@ private:
 
         kpr::code code;
         encode_keypoint(raw, code.data(), weight);
-        grid.add(code, kpr::point{x, y}, explode_t<Outer, Inner>{});
+        grid.add(code, mrl::point_t{x, y}, explode_t<Outer, Inner>{});
       }
     }
   }
