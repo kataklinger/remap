@@ -28,6 +28,42 @@ struct point {
   }
 };
 
+template<std::size_t Idx, std::integral Ty>
+Ty get(point<Ty> const& pt) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return pt.x_;
+  }
+  else {
+    return pt.y_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty& get(point<Ty>& pt) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return pt.x_;
+  }
+  else {
+    return pt.y_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty&& get(point<Ty>&& pt) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return std::move(pt.x_);
+  }
+  else {
+    return std::move(pt.y_);
+  }
+}
+
 template<std::integral Ty>
 [[nodiscard]] inline point<Ty> operator+(point<Ty> const& lhs,
                                          point<Ty> const& rhs) noexcept {
@@ -89,6 +125,42 @@ struct dimensions {
   value_type height_{};
 };
 
+template<std::size_t Idx, std::unsigned_integral Ty>
+Ty const& get(dimensions<Ty> const& dim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return dim.width_;
+  }
+  else {
+    return dim.height_;
+  }
+}
+
+template<std::size_t Idx, std::unsigned_integral Ty>
+Ty& get(dimensions<Ty>& dim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return dim.width_;
+  }
+  else {
+    return dim.height_;
+  }
+}
+
+template<std::size_t Idx, std::unsigned_integral Ty>
+Ty&& get(dimensions<Ty>&& dim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return std::move(dim.width_);
+  }
+  else {
+    return std::move(dim.height_);
+  }
+}
+
 template<std::integral Ty>
 struct limits {
   using value_type = Ty;
@@ -110,6 +182,42 @@ struct limits {
   value_type upper_{std::numeric_limits<value_type>::min()};
 };
 
+template<std::size_t Idx, std::integral Ty>
+Ty const& get(limits<Ty> const& lim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return lim.lower_;
+  }
+  else {
+    return lim.upper_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty& get(limits<Ty>& lim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return lim.lower_;
+  }
+  else {
+    return lim.upper_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty&& get(limits<Ty>&& lim) {
+  static_assert(Idx < 2);
+
+  if constexpr (Idx == 0) {
+    return std::move(lim.lower_);
+  }
+  else {
+    return std::move(lim.upper_);
+  }
+}
+
 template<std::integral Ty>
 struct region {
   using value_type = Ty;
@@ -120,6 +228,10 @@ struct region {
 
   [[nodiscard]] inline value_type height() const noexcept {
     return bottom_ - top_;
+  }
+
+  [[nodiscard]] inline point<value_type> margins() const noexcept {
+    return {left_ + right_, top_ + bottom_};
   }
 
   [[nodiscard]] inline value_type area() const noexcept {
@@ -142,6 +254,60 @@ template<std::integral Ty>
 [[nodiscard]] inline region<Ty> from_limits(limits<Ty> hor,
                                             limits<Ty> ver) noexcept {
   return {hor.lower_, ver.lower_, hor.upper_, ver.upper_};
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty const& get(region<Ty> const& reg) {
+  static_assert(Idx < 4);
+
+  if constexpr (Idx == 0) {
+    return reg.left_;
+  }
+  if constexpr (Idx == 1) {
+    return reg.top_;
+  }
+  if constexpr (Idx == 2) {
+    return reg.right_;
+  }
+  else {
+    return reg.bottom_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty& get(region<Ty>& reg) {
+  static_assert(Idx < 4);
+
+  if constexpr (Idx == 0) {
+    return reg.left_;
+  }
+  if constexpr (Idx == 1) {
+    return reg.top_;
+  }
+  if constexpr (Idx == 2) {
+    return reg.right_;
+  }
+  else {
+    return reg.bottom_;
+  }
+}
+
+template<std::size_t Idx, std::integral Ty>
+Ty&& get(region<Ty>&& reg) {
+  static_assert(Idx < 4);
+
+  if constexpr (Idx == 0) {
+    return std::move(reg.left_);
+  }
+  if constexpr (Idx == 1) {
+    return std::move(reg.top_);
+  }
+  if constexpr (Idx == 2) {
+    return std::move(reg.right_);
+  }
+  else {
+    return std::move(reg.bottom_);
+  }
 }
 
 } // namespace cdt

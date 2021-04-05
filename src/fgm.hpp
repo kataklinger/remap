@@ -4,6 +4,8 @@
 #include "cpl.hpp"
 #include "mrl.hpp"
 
+#include <algorithm>
+
 namespace fgm {
 template<std::uint8_t Depth>
 using dot_t = std::array<std::uint16_t, Depth>;
@@ -83,32 +85,49 @@ private:
   void ensure(point_t pos) {
     mrl::region_t region{};
 
-    auto extend{false};
-    if (pos.x_ < zero_.x_) {
-      region.left_ = step_.width_;
-      zero_.x_ -= step_.width_;
-      extend = true;
-    }
-    else if (pos.x_ > static_cast<std::int32_t>(zero_.x_ + dots_.width() -
-                                                step_.width_)) {
-      region.right_ = step_.width_;
-      extend = true;
-    }
+    auto extend_h{extend<0>(region, pos, dots_.width())};
+    auto extend_v{extend<1>(region, pos, dots_.height())};
 
-    if (pos.y_ < zero_.y_) {
-      region.top_ = step_.height_;
-      zero_.y_ -= step_.height_;
-      extend = true;
-    }
-    else if (pos.y_ > static_cast<std::int32_t>(zero_.y_ + dots_.height() -
-                                                step_.height_)) {
-      region.bottom_ = step_.height_;
-      extend = true;
-    }
-
-    if (extend) {
+    if (extend_h || extend_v) {
       dots_ = dots_.extend(region);
     }
+  }
+
+  template<std::size_t Idx>
+  [[nodiscard]] bool
+      extend(mrl::region_t& region, point_t pos, std::size_t size) noexcept {
+    if (get<Idx>(pos) < get<Idx>(zero_)) {
+      get<Idx>(region) = get_step<Idx>(pos);
+      get<Idx>(zero_) -= get<Idx>(region);
+
+      return true;
+    }
+
+    if (auto limit{get_limit<Idx>(size)}; get<Idx>(pos) > limit) {
+      get<Idx + 2>(region) = get_step<Idx>(pos, limit);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  template<std::size_t Idx>
+  [[nodiscard]] inline std::size_t get_step(point_t pos) const noexcept {
+    return std::max(get<Idx>(step_),
+                    static_cast<std::size_t>(get<Idx>(zero_) - get<Idx>(pos)));
+  }
+
+  template<std::size_t Idx>
+  [[nodiscard]] inline std::size_t get_step(point_t pos,
+                                            std::size_t limit) const noexcept {
+    return std::max(get<Idx>(step_),
+                    static_cast<std::size_t>(limit - get<Idx>(pos)));
+  }
+
+  template<std::size_t Idx>
+  [[nodiscard]] inline std::int32_t get_limit(std::size_t size) const noexcept {
+    return get<Idx>(zero_) + size - get<Idx>(step_);
   }
 
 private:

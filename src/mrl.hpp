@@ -96,9 +96,11 @@ public:
   }
 
   [[nodiscard]] matrix crop(region_t region) const {
-    matrix output{{dimensions_.width_ - region.width(),
-                   dimensions_.height_ - region.height()},
-                  data_.get_allocator()};
+    auto margins{region.margins()};
+
+    matrix output{
+        {dimensions_.width_ - margins.x_, dimensions_.height_ - margins.y_},
+        data_.get_allocator()};
 
     auto nwidth{output.width()};
 
@@ -112,9 +114,11 @@ public:
   }
 
   [[nodiscard]] matrix extend(region_t region) const {
-    matrix output{{dimensions_.width_ + region.width(),
-                   dimensions_.height_ + region.height()},
-                  data_.get_allocator()};
+    auto margins{region.margins()};
+
+    matrix output{
+        {dimensions_.width_ + margins.x_, dimensions_.height_ + margins.y_},
+        data_.get_allocator()};
 
     auto nwidth{output.width()};
 

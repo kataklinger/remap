@@ -350,6 +350,7 @@ template<std::uint8_t Depth, cpl::pixel Pixel, typename Iter>
 [[nodiscard]] auto splice(Iter first, Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
+
   details::match_all(snippets, deltas);
   details::crossmatch_all(deltas, snippets.size());
 
