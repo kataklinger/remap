@@ -122,7 +122,7 @@ private:
   [[nodiscard]] inline std::size_t get_step(point_t pos,
                                             std::size_t limit) const noexcept {
     return std::max(get<Idx>(step_),
-                    static_cast<std::size_t>(limit - get<Idx>(pos)));
+                    static_cast<std::size_t>(get<Idx>(pos) - limit));
   }
 
   template<std::size_t Idx>
