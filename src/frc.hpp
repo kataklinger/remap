@@ -11,7 +11,7 @@
 #include <execution>
 #include <list>
 
-namespace fgc {
+namespace frc {
 class collector {
 public:
   static inline constexpr std::uint8_t color_depth{16};
@@ -128,4 +128,4 @@ private:
   fragment_list fragments_;
   fragment_t* current_{nullptr};
 };
-} // namespace fgc
+} // namespace frc

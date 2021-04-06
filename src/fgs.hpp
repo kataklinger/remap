@@ -2,8 +2,10 @@
 #pragma once
 
 #include "fgm.hpp"
+#include "kpe.hpp"
 #include "kpm.hpp"
 
+#include <execution>
 #include <stack>
 
 namespace fgs {
@@ -328,6 +330,10 @@ namespace details {
       return result_;
     }
 
+    [[nodiscard]] inline std::vector<fragment_t>& result() noexcept {
+      return result_;
+    }
+
   private:
     std::vector<snippet_type> const* snippets_;
     std::vector<fragment_t> result_;
@@ -347,7 +353,8 @@ namespace details {
 } // namespace details
 
 template<std::uint8_t Depth, cpl::pixel Pixel, typename Iter>
-[[nodiscard]] auto splice(Iter first, Iter last) {
+[[nodiscard]] std::vector<fgm::fragment<Depth, Pixel>> splice(Iter first,
+                                                              Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
 
@@ -357,11 +364,6 @@ template<std::uint8_t Depth, cpl::pixel Pixel, typename Iter>
   details::splicer<Depth, Pixel> spliced{snippets};
   build_graph(deltas, snippets.size()).process(spliced);
 
-  std::vector<mrl::matrix<cpl::nat_cc>> result;
-  for (auto& fragment : spliced.result()) {
-    result.emplace_back(fragment.generate());
-  }
-
-  return result;
+  return std::move(spliced.result());
 }
 } // namespace fgs

@@ -1,8 +1,8 @@
 ﻿
 #include "cte.hpp"
-#include "fgc.hpp"
 #include "fgm.hpp"
 #include "fgs.hpp"
+#include "frc.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
@@ -71,7 +71,7 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
              static_cast<std::size_t>(temp.width()) * temp.height());
   input.close();
 
-  return temp.crop({31, 53, 55, 105});
+  return temp.crop({31, 55, 55, 105});
 }
 
 void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
@@ -80,7 +80,7 @@ void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
 
 class file_feed {
 public:
-  using image_type = fgc::collector::image_type;
+  using image_type = frc::collector::image_type;
   using allocator_type = image_type::allocator_type;
 
 private:
@@ -96,7 +96,7 @@ public:
              std::stoi(b.filename().string());
     });
 
-    files_.resize(5000);
+    files_.resize(7000);
 
     next_ = files_.begin();
   }
@@ -134,7 +134,7 @@ public:
                static_cast<std::size_t>(temp.width()) * temp.height());
     input.close();
 
-    return temp.crop({31, 53, 55, 105});
+    return temp.crop({31, 55, 55, 105});
   }
 
 private:
@@ -278,12 +278,12 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  fgc::collector collector{image1.dimensions()};
+  frc::collector collector{image1.dimensions()};
   collector.collect(file_feed{ddir / "seq"});
   auto map{collector.current().generate()};
 
   auto& fragments{collector.fragments()};
-  auto spliced{fgs::splice<fgc::collector::color_depth, cpl::nat_cc>(
+  auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
       fragments.begin(), fragments.end())};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
