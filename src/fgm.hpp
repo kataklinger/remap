@@ -30,7 +30,7 @@ public:
 
   template<typename Alloc>
   void blit(point_t pos, mrl::matrix<pixel_type, Alloc> const& image) {
-    ensure(pos);
+    ensure(pos, image.dimensions());
 
     auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
     auto stride{dots_.width() - image.width()};
@@ -45,7 +45,7 @@ public:
   }
 
   void blit(point_t pos, fragment const& other) {
-    ensure(pos);
+    ensure(pos, other.dots_.dimensions());
 
     auto& dots{other.dots_};
     auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
@@ -82,11 +82,11 @@ public:
   }
 
 private:
-  void ensure(point_t pos) {
+  void ensure(point_t pos, mrl::dimensions_t const& dim) {
     mrl::region_t region{};
 
-    auto extend_h{extend<0>(region, pos, dots_.width())};
-    auto extend_v{extend<1>(region, pos, dots_.height())};
+    auto extend_h{extend<0>(region, pos, dim)};
+    auto extend_v{extend<1>(region, pos, dim)};
 
     if (extend_h || extend_v) {
       dots_ = dots_.extend(region);
@@ -94,17 +94,21 @@ private:
   }
 
   template<std::size_t Idx>
-  [[nodiscard]] bool
-      extend(mrl::region_t& region, point_t pos, std::size_t size) noexcept {
+  [[nodiscard]] bool extend(mrl::region_t& region,
+                            point_t pos,
+                            mrl::dimensions_t const& dim) noexcept {
     if (get<Idx>(pos) < get<Idx>(zero_)) {
-      get<Idx>(region) = get_step<Idx>(pos);
+      get<Idx>(region) = get_step<Idx>(get<Idx>(zero_) - get<Idx>(pos));
       get<Idx>(zero_) -= get<Idx>(region);
 
       return true;
     }
 
-    if (auto limit{get_limit<Idx>(size)}; get<Idx>(pos) > limit) {
-      get<Idx + 2>(region) = get_step<Idx>(pos, limit);
+    auto limit{get<Idx>(zero_) + get<Idx>(dots_.dimensions())},
+        required{get<Idx>(pos) + get<Idx>(dim)};
+
+    if (required > limit) {
+      get<Idx + 2>(region) = get_step<Idx>(required - limit);
 
       return true;
     }
@@ -113,21 +117,9 @@ private:
   }
 
   template<std::size_t Idx>
-  [[nodiscard]] inline std::size_t get_step(point_t pos) const noexcept {
-    return std::max(get<Idx>(step_),
-                    static_cast<std::size_t>(get<Idx>(zero_) - get<Idx>(pos)));
-  }
-
-  template<std::size_t Idx>
-  [[nodiscard]] inline std::size_t get_step(point_t pos,
-                                            std::size_t limit) const noexcept {
-    return std::max(get<Idx>(step_),
-                    static_cast<std::size_t>(get<Idx>(pos) - limit));
-  }
-
-  template<std::size_t Idx>
-  [[nodiscard]] inline std::int32_t get_limit(std::size_t size) const noexcept {
-    return get<Idx>(zero_) + size - get<Idx>(step_);
+  [[nodiscard]] inline std::size_t get_step(std::size_t change) const noexcept {
+    auto step{get<Idx>(step_)};
+    return (change / step) + (change % step != 0 ? step : 0);
   }
 
 private:

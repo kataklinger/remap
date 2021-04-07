@@ -141,8 +141,8 @@ namespace details {
     auto segments{static_cast<std::int16_t>(snippets.size())};
     deltas.reserve((segments * segments - segments) / 2);
 
-    for (int16_t i{segments - 1}; i >= 0; --i) {
-      for (int16_t j{segments - 1}; j > i; --j) {
+    for (std::int16_t i{0}; i < segments; ++i) {
+      for (auto j{i + 1}; j < segments; ++j) {
         deltas.emplace_back(couple_t{i, j});
       }
     }
@@ -190,9 +190,9 @@ namespace details {
     for (auto i{deltas.begin()}; i < deltas.end(); ++i) {
       auto [ix, iy]{i->couple()};
 
-      for (auto j{i + 1}; true; ++j) {
+      for (auto j{i + 1}; j < deltas.end(); ++j) {
         if (auto [jx, jy]{j->couple()}; jx == ix) {
-          auto k{deltas[jx * (2 * segments - jx - 1) / 2 + jy - 1]};
+          auto k{deltas[iy * (2 * segments - iy - 1) / 2 + jy - iy - 1]};
 
           crossmatch_single(*i, *j, k);
         }
@@ -237,14 +237,14 @@ namespace details {
     void add_edge(couple_t couple, cdt::offset_t const& offset) {
       auto [idx, jdx]{couple};
 
-      nodes_[idx].edges_.emplace_back(idx, offset);
-      nodes_[jdx].edges_.emplace_back(jdx, -offset);
+      nodes_[idx].edges_.emplace_back(jdx, offset);
+      nodes_[jdx].edges_.emplace_back(idx, -offset);
     }
 
     template<walker Walker>
     void process(Walker& w) {
       for (std::uint16_t i{0}; i < nodes_.size(); ++i) {
-        if (nodes_[i].visited_) {
+        if (!nodes_[i].visited_) {
           w();
 
           walk(state{i, 0, {}}, w);
