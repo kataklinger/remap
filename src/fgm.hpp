@@ -28,6 +28,11 @@ public:
       , dots_{step} {
   }
 
+  inline fragment(matrix_type dots, mrl::dimensions_t step) noexcept
+      : step_{step}
+      , dots_{std::move(dots)} {
+  }
+
   template<typename Alloc>
   void blit(point_t pos, mrl::matrix<pixel_type, Alloc> const& image) {
     ensure(pos, image.dimensions());
@@ -77,6 +82,10 @@ public:
     return result;
   }
 
+  [[nodiscard]] inline matrix_type const& dots() const noexcept {
+    return dots_;
+  }
+
   [[nodiscard]] inline mrl::dimensions_t dimensions() const noexcept {
     return dots_.dimensions();
   }
@@ -104,13 +113,14 @@ private:
       return true;
     }
 
-    auto limit{get<Idx>(zero_) + get<Idx>(dots_.dimensions())},
-        required{get<Idx>(pos) + get<Idx>(dim)};
+    auto required{get<Idx>(pos) + static_cast<std::int32_t>(get<Idx>(dim))};
+    if (required > 0) {
+      if (auto limit{get<Idx>(zero_) + get<Idx>(dots_.dimensions())};
+          static_cast<std::size_t>(required) > limit) {
+        get<Idx + 2>(region) = get_step<Idx>(required - limit);
 
-    if (required > limit) {
-      get<Idx + 2>(region) = get_step<Idx>(required - limit);
-
-      return true;
+        return true;
+      }
     }
 
     return false;
