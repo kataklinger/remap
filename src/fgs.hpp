@@ -268,7 +268,7 @@ namespace details {
 
           if (active.edge_ < current.edges_.size()) {
             hist.emplace(active.node_, active.edge_ + 1, active.offset_);
-            active = advance(active, current);
+            active = advance(active, current).value();
           }
           else if (!backtrack(active, hist)) {
             break;
@@ -279,23 +279,33 @@ namespace details {
 
     [[nodiscard]] inline bool backtrack(state& active,
                                         history_t& hist) noexcept {
-      if (!hist.empty()) {
-        active = advance(hist.top());
+      while (!hist.empty()) {
+        auto next{advance(hist.top())};
         hist.pop();
-        return true;
+
+        if (next) {
+          active = *next;
+          return true;
+        }
       }
 
       return false;
     }
 
-    [[nodiscard]] inline state advance(state const& s) const noexcept {
+    [[nodiscard]] inline std::optional<state>
+        advance(state const& s) const noexcept {
       return advance(s, nodes_[s.node_]);
     }
 
-    [[nodiscard]] inline state advance(state const& s,
-                                       node const& current) const noexcept {
-      auto& next{current.edges_[s.edge_]};
-      return {next.link_, 0, s.offset_ + next.offset_};
+    [[nodiscard]] inline std::optional<state>
+        advance(state const& s, node const& current) const noexcept {
+      if (s.edge_ < current.edges_.size()) {
+        auto& next{current.edges_[s.edge_]};
+        return std::optional<state>{
+            std::in_place, next.link_, s.edge_, s.offset_ + next.offset_};
+      }
+
+      return {};
     }
 
   private:
