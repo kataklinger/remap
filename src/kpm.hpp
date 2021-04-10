@@ -207,9 +207,14 @@ namespace details {
   [[nodiscard]] inline intersect_t get_limits(std::int32_t delta,
                                               mrl::size_type previous,
                                               mrl::size_type current) noexcept {
-    return delta < 0
-               ? intersect_t{{0, previous - delta}, {0ULL + delta, current}}
-               : intersect_t{{0ULL + delta, previous}, {0, current - delta}};
+    if (delta < 0) {
+      delta = std::abs(delta);
+      return intersect_t{{0, std::min(previous, current - delta)},
+                         {0ULL + delta, std::min(current, previous + delta)}};
+    }
+
+    return intersect_t{{0ULL + delta, std::min(previous, current + delta)},
+                       {0, std::min(current, previous - delta)}};
   }
 
   template<typename Region>
@@ -232,7 +237,7 @@ namespace details {
     auto match_density{matches / overlap_area};
 
     return area_rate >= 0.015f && match_density >= min_density &&
-           match_rate >= 1 - 0.3f * std::hypotf(overlap_rate, 1 - area_rate);
+           match_rate >= 1 - 0.35f * std::hypotf(overlap_rate, 1 - area_rate);
   }
 
 } // namespace details
@@ -247,13 +252,15 @@ template<match_config Cfg, typename Region>
 
   auto ticket{cast_vote(config, previous, current)};
 
-  ticket.erase(std::remove_if(ticket.begin(), ticket.end(), [&](auto const& v) {
+  auto it{std::remove_if(ticket.begin(), ticket.end(), [&](auto const& v) {
     auto hor{get_limits(v.offset_.x_, pdim.width_, cdim.width_)};
     auto ver{get_limits(v.offset_.y_, pdim.height_, cdim.height_)};
 
-    return !is_overlapped(hor.first, ver.first, pdim, previous, v.count_) ||
+    return !is_overlapped(hor.first, ver.first, pdim, previous, v.count_) &&
            !is_overlapped(hor.second, ver.second, cdim, current, v.count_);
-  }));
+  })};
+
+  ticket.erase(it, ticket.end());
 
   return ticket;
 }

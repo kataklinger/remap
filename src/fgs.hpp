@@ -247,14 +247,15 @@ namespace details {
         if (!nodes_[i].visited_) {
           w();
 
-          walk(state{i, 0, {}}, w);
+          state s{i, 0, {}};
+          walk(s, w);
         }
       }
     }
 
   private:
     template<walker Walker>
-    void walk(state&& active, Walker& w) {
+    void walk(state& active, Walker& w) {
       for (history_t hist; true;) {
         if (auto& current{nodes_[active.node_]}; current.visited_) {
           if (!backtrack(active, hist)) {
@@ -268,7 +269,7 @@ namespace details {
 
           if (active.edge_ < current.edges_.size()) {
             hist.emplace(active.node_, active.edge_ + 1, active.offset_);
-            active = advance(active, current).value();
+            active = *advance(active, current);
           }
           else if (!backtrack(active, hist)) {
             break;
