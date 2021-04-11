@@ -76,7 +76,7 @@ public:
     return data_.size();
   }
 
-  [[nodiscard]] inline dimensions_t dimensions() const noexcept {
+  [[nodiscard]] inline dimensions_t const& dimensions() const noexcept {
     return dimensions_;
   }
 

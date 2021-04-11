@@ -67,8 +67,7 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
     return temp;
   }
 
-  input.read(reinterpret_cast<char*>(temp.data()),
-             static_cast<std::size_t>(temp.width()) * temp.height());
+  input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
   input.close();
 
   return temp.crop({31, 55, 55, 105});
@@ -76,6 +75,54 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
 
 void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
   png::write(ddir / filename, image.width(), image.height(), image.data());
+}
+
+template<typename Iter>
+void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
+  for (auto i{0}; first != last; ++first, ++i) {
+    std::fstream output;
+    output.open(dir / std::to_string(i), std::ios::out | std::ios::binary);
+
+    auto dim{first->dots().dimensions()};
+    output.write(reinterpret_cast<char const*>(&dim),
+                 sizeof(mrl::dimensions_t));
+
+    output.write(reinterpret_cast<char const*>(first->dots().data()),
+                 first->dots().dimensions().area() * sizeof(fgm::dot_t<16>));
+
+    output.close();
+  }
+}
+
+auto read_fragments(std::filesystem::path dir) {
+  using namespace std::filesystem;
+  using fragment_t = fgm::fragment<16, cpl::nat_cc>;
+
+  std::vector<std::filesystem::path> files;
+  std::copy(
+      directory_iterator(dir), directory_iterator(), back_inserter(files));
+  std::sort(files.begin(), files.end(), [](auto& a, auto& b) {
+    return std::stoi(a.filename().string()) < std::stoi(b.filename().string());
+  });
+
+  std::vector<fragment_t> result;
+  for (auto& file : files) {
+    std::ifstream input;
+    input.open(file, std::ios::in | std::ios::binary);
+
+    mrl::dimensions_t dim{};
+    input.read(reinterpret_cast<char*>(&dim), sizeof(mrl::dimensions_t));
+
+    fragment_t::matrix_type temp{dim};
+    input.read(reinterpret_cast<char*>(temp.data()),
+               dim.area() * sizeof(fgm::dot_t<16>));
+
+    input.close();
+
+    result.emplace_back(std::move(temp), mrl::dimensions_t{1, 1});
+  }
+
+  return result;
 }
 
 class file_feed {
@@ -96,7 +143,7 @@ public:
              std::stoi(b.filename().string());
     });
 
-    files_.resize(7000);
+    // files_.resize(900);
 
     next_ = files_.begin();
   }
@@ -130,8 +177,7 @@ public:
       return temp;
     }
 
-    input.read(reinterpret_cast<char*>(temp.data()),
-               static_cast<std::size_t>(temp.width()) * temp.height());
+    input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
     input.close();
 
     return temp.crop({31, 55, 55, 105});
@@ -254,7 +300,7 @@ int main() {
   frag.blit({0, 0}, image1);
   frag.blit(*offset, image2);
 
-  auto merged{frag.generate()};
+  auto merged{frag.blend().image_};
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
@@ -278,13 +324,17 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  frc::collector collector{image1.dimensions()};
-  collector.collect(file_feed{ddir / "seq"});
-  auto map{collector.current().generate()};
+  // frc::collector collector{image1.dimensions()};
+  // collector.collect(file_feed{ddir / "seq"});
 
-  auto& fragments{collector.fragments()};
+  // auto& fragments{collector.fragments()};
+  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+
+  auto fragments{read_fragments(ddir / "fgm")};
+
   auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
       fragments.begin(), fragments.end())};
+  auto map{spliced.front().blend().image_};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("map.png", rgb_mp);

@@ -186,78 +186,125 @@ namespace details {
                : cast_vote_impl(config, previous, current, std::false_type{});
   }
 
+  struct intersect_data {
+    std::size_t count_;
+    float rate_;
+  };
+
   template<typename Region>
-  inline std::size_t intersect_count(Region const& region,
-                                     mrl::region_t limits) {
+  [[nodiscard]] intersect_data
+      filter_keypoints(Region const& region,
+                       mrl::matrix<std::uint8_t> const& mask,
+                       cdt::offset_t delta,
+                       mrl::region_t limits) noexcept {
     std::size_t count{};
 
     for (auto const& [c, group] : region.points()) {
       for (auto point : group) {
         if (limits.contains(point)) {
-          ++count;
+          if (auto idx{to_index(static_cast<cdt::offset_t>(point) + delta,
+                                mask.dimensions())};
+              mask.data()[idx] != 0) {
+            ++count;
+          }
         }
       }
     }
 
-    return count;
+    return {count, static_cast<float>(count) / region.total_count()};
   }
 
-  using intersect_t = std::pair<mrl::limits_t, mrl::limits_t>;
+  using intersect_span = std::pair<mrl::limits_t, mrl::limits_t>;
 
-  [[nodiscard]] inline intersect_t get_limits(std::int32_t delta,
-                                              mrl::size_type previous,
-                                              mrl::size_type current) noexcept {
+  [[nodiscard]] inline intersect_span
+      get_limits(std::int32_t delta,
+                 mrl::size_type previous,
+                 mrl::size_type current) noexcept {
     if (delta < 0) {
       delta = std::abs(delta);
-      return intersect_t{{0, std::min(previous, current - delta)},
-                         {0ULL + delta, std::min(current, previous + delta)}};
+      return intersect_span{
+          {0, std::min(previous, current - delta)},
+          {0ULL + delta, std::min(current, previous + delta)}};
     }
 
-    return intersect_t{{0ULL + delta, std::min(previous, current + delta)},
-                       {0, std::min(current, previous - delta)}};
+    return intersect_span{{0ULL + delta, std::min(previous, current + delta)},
+                          {0, std::min(current, previous - delta)}};
   }
 
-  template<typename Region>
-  [[nodiscard]] inline bool is_overlapped(mrl::limits_t const& hor,
-                                          mrl::limits_t const& ver,
-                                          mrl::dimensions_t const& dim,
-                                          Region const& region,
-                                          std::size_t matches) {
+  struct overlap_data {
+    inline overlap_data(float match_area,
+                        float total_area,
+                        float match_count,
+                        float total_count,
+                        intersect_data intersect) noexcept
+        : overlap_keypoints_count_{intersect.count_}
+        , overlap_keypoints_rate_{intersect.count_ / total_count}
+        , overlap_area_rate_{match_area / total_area}
+        , match_keypoints_rate_{match_count / intersect.count_}
+        , match_keypoints_density_{match_count / match_area} {
+    }
+
+    std::size_t overlap_keypoints_count_;
+
+    float overlap_keypoints_rate_;
+    float match_keypoints_rate_;
+
+    float match_keypoints_density_;
+
+    float overlap_area_rate_;
+  };
+
+  [[nodiscard]] bool is_overlapping(overlap_data const& fst,
+                                    overlap_data const& snd) noexcept {
     constexpr auto min_density{1.0f / (32 * 32)};
 
-    auto overlap_region{from_limits(hor, ver)};
-    auto overlap_count{details::intersect_count(region, overlap_region)};
+    auto overlap_rate{
+        std::max(fst.overlap_keypoints_rate_, snd.overlap_keypoints_rate_)};
 
-    auto overlap_area{static_cast<float>(overlap_region.area())};
-    auto area_rate{overlap_area / dim.area()};
+    auto area_rate{std::max(fst.overlap_area_rate_, snd.overlap_area_rate_)};
 
-    auto overlap_rate{static_cast<float>(overlap_count) / region.total_count()};
+    auto match_rate{
+        std::max(fst.match_keypoints_rate_, snd.match_keypoints_rate_)};
 
-    auto match_rate{static_cast<float>(matches) / overlap_count};
-    auto match_density{matches / overlap_area};
-
-    return area_rate >= 0.015f && match_density >= min_density &&
+    return area_rate >= 0.015f && fst.match_keypoints_density_ >= min_density &&
            match_rate >= 1 - 0.35f * std::hypotf(overlap_rate, 1 - area_rate);
   }
-
 } // namespace details
 
 template<match_config Cfg, typename Region>
-[[nodiscard]] inline ticket_t<Cfg> match(Cfg const& config,
-                                         Region const& previous,
-                                         mrl::dimensions_t pdim,
-                                         Region const& current,
-                                         mrl::dimensions_t cdim) {
+[[nodiscard]] inline ticket_t<Cfg>
+    match(Cfg const& config,
+          Region const& preg,
+          mrl::matrix<std::uint8_t> const& pmask,
+          Region const& creg,
+          mrl::matrix<std::uint8_t> const& cmask) {
   using namespace details;
 
-  auto ticket{cast_vote(config, previous, current)};
+  auto ticket{cast_vote(config, preg, creg)};
 
   auto it{std::remove_if(ticket.begin(), ticket.end(), [&](auto const& v) {
-    auto hor{get_limits(v.offset_.x_, pdim.width_, cdim.width_)};
-    auto ver{get_limits(v.offset_.y_, pdim.height_, cdim.height_)};
+    auto &pdim{pmask.dimensions()}, &cdim{cmask.dimensions()};
 
-    return !is_overlapped(hor.first, ver.first, pdim, previous, v.count_) &&
-           !is_overlapped(hor.second, ver.second, cdim, current, v.count_);
+    auto hor{get_limits(v.offset_.x_, pdim.width_, cdim.width_)},
+        ver{get_limits(v.offset_.y_, pdim.height_, cdim.height_)};
+
+    auto plim{from_limits(hor.first, ver.first)},
+        clim{from_limits(hor.second, ver.second)};
+
+    details::overlap_data pover(
+        plim.area(),
+        pmask.dimensions().area(),
+        v.count_,
+        preg.total_count(),
+        filter_keypoints(preg, cmask, -v.offset_, plim));
+
+    details::overlap_data cover(clim.area(),
+                                cmask.dimensions().area(),
+                                v.count_,
+                                creg.total_count(),
+                                filter_keypoints(creg, pmask, v.offset_, clim));
+
+    return !details::is_overlapping(pover, cover);
   })};
 
   ticket.erase(it, ticket.end());

@@ -12,6 +12,14 @@ using dot_t = std::array<std::uint16_t, Depth>;
 
 using point_t = cdt::point<std::int32_t>;
 
+template<cpl::pixel Pixel>
+struct fragment_blend {
+  using pixel_type = Pixel;
+
+  mrl::matrix<pixel_type> image_;
+  mrl::matrix<std::uint8_t> mask_;
+};
+
 template<std::uint8_t Depth, cpl::pixel Pixel>
 class fragment {
 public:
@@ -67,19 +75,25 @@ public:
     }
   }
 
-  [[nodiscard]] mrl::matrix<pixel_type> generate() const {
-    mrl::matrix<pixel_type> result{dots_.dimensions()};
-    auto out{result.data()};
+  [[nodiscard]] fragment_blend<pixel_type> blend() const {
+    mrl::matrix<pixel_type> image{dots_.dimensions()};
+    mrl::matrix<std::uint8_t> mask{dots_.dimensions()};
+
+    auto img_out{image.data()};
+    auto mask_out{mask.data()};
+
     for (auto first{dots_.data()}, last{dots_.end()}; first < last;
-         ++first, ++out) {
+         ++first, ++img_out, ++mask_out) {
       auto dot{&(*first)[0]};
       auto selected{std::max_element(dot, dot + depth)};
       if (*selected != 0) {
-        *out = {static_cast<typename pixel_type::value_type>(selected - dot)};
+        *img_out = {
+            static_cast<typename pixel_type::value_type>(selected - dot)};
+        *mask_out = *selected != 0 ? 1 : 0;
       }
     }
 
-    return result;
+    return {std::move(image), std::move(mask)};
   }
 
   [[nodiscard]] inline matrix_type const& dots() const noexcept {

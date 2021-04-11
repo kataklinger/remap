@@ -15,18 +15,20 @@ namespace details {
   template<std::uint8_t Depth>
   struct snippet {
     fgm::fragment<Depth, cpl::nat_cc> const* fragment_{};
+    mrl::matrix<std::uint8_t> mask_;
+
     grid_t grid_;
   };
 
   template<std::uint8_t Depth>
   [[nodiscard]] snippet<Depth>
       extract_single(fgm::fragment<Depth, cpl::nat_cc> const& fragment) {
-    auto image{fragment.generate()};
+    auto [image, mask]{fragment.blend()};
 
     mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
 
     kpe::extractor<grid_t, 0> extractor{image.dimensions()};
-    return {&fragment, extractor.extract(image, median)};
+    return {&fragment, std::move(mask), extractor.extract(image, median)};
   }
 
   template<std::uint8_t Depth, typename Iter>
@@ -161,9 +163,9 @@ namespace details {
 
                     auto ticket{kpm::match(details::match_config{},
                                            left.grid_[0],
-                                           left.fragment_->dimensions(),
+                                           left.mask_,
                                            right.grid_[0],
-                                           right.fragment_->dimensions())};
+                                           right.mask_)};
                     d.update_raw(ticket);
                   });
   }

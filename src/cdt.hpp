@@ -26,6 +26,11 @@ struct point {
 
     return *this;
   }
+
+  template<std::integral Tx>
+  [[nodiscard]] inline explicit operator point<Tx>() const noexcept {
+    return {static_cast<Tx>(x_), static_cast<Tx>(y_)};
+  }
 };
 
 template<std::size_t Idx, std::integral Ty>
@@ -97,22 +102,6 @@ template<std::integral Ty>
   return !(lhs == rhs);
 }
 
-using offset_t = point<std::int32_t>;
-
-struct offset_hash {
-  [[nodiscard]] std::size_t operator()(offset_t const& off) const noexcept {
-    std::size_t hashed = 2166136261U;
-
-    hashed ^= static_cast<std::size_t>(off.x_);
-    hashed *= 16777619U;
-
-    hashed ^= static_cast<std::size_t>(off.y_);
-    hashed *= 16777619U;
-
-    return hashed;
-  }
-};
-
 template<std::unsigned_integral Ty>
 struct dimensions {
   using value_type = Ty;
@@ -159,6 +148,28 @@ Ty&& get(dimensions<Ty>&& dim) {
   else {
     return std::move(dim.height_);
   }
+}
+
+using offset_t = point<std::int32_t>;
+
+struct offset_hash {
+  [[nodiscard]] std::size_t operator()(offset_t const& off) const noexcept {
+    std::size_t hashed = 2166136261U;
+
+    hashed ^= static_cast<std::size_t>(off.x_);
+    hashed *= 16777619U;
+
+    hashed ^= static_cast<std::size_t>(off.y_);
+    hashed *= 16777619U;
+
+    return hashed;
+  }
+};
+
+template<std::integral Ty, std::unsigned_integral Tx>
+[[nodiscard]] inline std::ptrdiff_t
+    to_index(point<Ty> offset, dimensions<Tx> const& dim) noexcept {
+  return static_cast<std::ptrdiff_t>(dim.width_) * offset.y_ + offset.x_;
 }
 
 template<std::integral Ty>
@@ -221,6 +232,14 @@ Ty&& get(limits<Ty>&& lim) {
 template<std::integral Ty>
 struct region {
   using value_type = Ty;
+
+  [[nodicard]] inline point<value_type> left_top() const noexcept {
+    return {left_, top_};
+  }
+
+  [[nodicard]] inline point<value_type> right_bottom() const noexcept {
+    return {right_, bottom_};
+  }
 
   [[nodiscard]] inline value_type width() const noexcept {
     return right_ - left_;
