@@ -249,15 +249,14 @@ namespace details {
         if (!nodes_[i].visited_) {
           w();
 
-          state s{i, 0, {}};
-          walk(s, w);
+          walk({i, 0, {}}, w);
         }
       }
     }
 
   private:
     template<walker Walker>
-    void walk(state& active, Walker& w) {
+    void walk(state active, Walker& w) {
       for (history_t hist; true;) {
         if (auto& current{nodes_[active.node_]}; current.visited_) {
           if (!backtrack(active, hist)) {
