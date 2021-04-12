@@ -1,11 +1,18 @@
 
 #pragma once
 
+#include "cdt.hpp"
+
 #include <concepts>
+#include <tuple>
 #include <vector>
 
 namespace mrl {
 using size_type = std::size_t;
+using point_t = cdt::point<size_type>;
+using dimensions_t = cdt::dimensions<size_type>;
+using limits_t = cdt::limits<size_type>;
+using region_t = cdt::region<size_type>;
 
 template<typename Ty, typename Alloc = std::allocator<Ty>>
 class matrix {
@@ -19,20 +26,17 @@ public:
   }
 
   inline explicit matrix(allocator_type const& alloc) noexcept
-      : width_{0}
-      , height_{0}
-      , data_{alloc} {
+      : data_{alloc} {
   }
 
-  inline matrix(size_type width, size_type height, allocator_type const& alloc)
-      : width_{width}
-      , height_{height}
+  inline matrix(dimensions_t dimensions, allocator_type const& alloc)
+      : dimensions_{dimensions}
       , data_{alloc} {
-    data_.resize(width * height);
+    data_.resize(dimensions.area());
   }
 
-  inline matrix(size_type width, size_type height)
-      : matrix(width, height, allocator_type{}) {
+  inline matrix(dimensions_t dimensions)
+      : matrix(dimensions, allocator_type{}) {
   }
 
   [[nodiscard]] inline value_type& operator[](size_type index) noexcept {
@@ -61,22 +65,26 @@ public:
   }
 
   [[nodiscard]] inline size_type width() const noexcept {
-    return width_;
+    return dimensions_.width_;
   }
 
   [[nodiscard]] inline size_type height() const noexcept {
-    return height_;
+    return dimensions_.height_;
   }
 
   [[nodiscard]] inline size_type size() const noexcept {
     return data_.size();
   }
 
+  [[nodiscard]] inline dimensions_t const& dimensions() const noexcept {
+    return dimensions_;
+  }
+
   template<typename Fn>
   [[nodiscard]] auto map(Fn convert) const
       requires std::invocable<Fn, value_type const&> {
     using target_type = std::invoke_result_t<Fn, const value_type&>;
-    matrix<target_type> output{width_, height_, data_.get_allocator()};
+    matrix<target_type> output{dimensions_, data_.get_allocator()};
 
     auto out{output.data()};
     for (auto cur{data_.data()}, last{data_.data() + data_.size()}; cur < last;
@@ -87,39 +95,37 @@ public:
     return output;
   }
 
-  matrix
-      crop(size_type left, size_type right, size_type top, size_type bottom) {
+  [[nodiscard]] matrix crop(region_t region) const {
+    auto margins{region.margins()};
+
     matrix output{
-        width_ - left - right, height_ - top - bottom, data_.get_allocator()};
+        {dimensions_.width_ - margins.x_, dimensions_.height_ - margins.y_},
+        data_.get_allocator()};
 
     auto nwidth{output.width()};
 
-    for (auto src{data() + top * width_ + left},
-         dst{output.data()},
-         last{output.end()};
-         dst < last;
-         src += width_, dst += nwidth) {
-
+    auto src{data() + region.top_ * dimensions_.width_ + region.left_};
+    for (auto dst{output.data()}, last{output.end()}; dst < last;
+         src += dimensions_.width_, dst += nwidth) {
       std::copy(src, src + nwidth, dst);
     }
 
     return output;
   }
 
-  matrix
-      extend(size_type left, size_type right, size_type top, size_type bottom) {
+  [[nodiscard]] matrix extend(region_t region) const {
+    auto margins{region.margins()};
+
     matrix output{
-        width_ + left + right, height_ + top + bottom, data_.get_allocator()};
+        {dimensions_.width_ + margins.x_, dimensions_.height_ + margins.y_},
+        data_.get_allocator()};
 
     auto nwidth{output.width()};
 
-    for (auto src{data()},
-         dst{output.data() + top * nwidth + left},
-         last{end()};
-         src < last;
-         src += width_, dst += nwidth) {
-
-      std::copy(src, src + width_, dst);
+    auto dst{output.data() + region.top_ * nwidth + region.left_};
+    for (auto src{data()}, last{end()}; src < last;
+         src += dimensions_.width_, dst += nwidth) {
+      std::copy(src, src + dimensions_.width_, dst);
     }
 
     return output;
@@ -130,8 +136,7 @@ public:
   }
 
 private:
-  size_type width_;
-  size_type height_;
+  dimensions_t dimensions_{};
 
   std::vector<value_type, allocator_type> data_;
 };

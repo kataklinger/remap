@@ -17,11 +17,11 @@ add_executable (remap
 	"src/cte.hpp"
 	"src/mod.hpp"
 	"src/fgm.hpp"
-	"src/main.cpp"
-	"src/fgc.hpp"
+	"src/frc.hpp"
 	"src/fgs.hpp"
 	"src/ifd.hpp"
-	"src/pngu.hpp")
+	"src/pngu.hpp"
+	"src/main.cpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)

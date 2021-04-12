@@ -4,9 +4,21 @@
 #include "cpl.hpp"
 #include "mrl.hpp"
 
+#include <algorithm>
+
 namespace fgm {
 template<std::uint8_t Depth>
 using dot_t = std::array<std::uint16_t, Depth>;
+
+using point_t = cdt::point<std::int32_t>;
+
+template<cpl::pixel Pixel>
+struct fragment_blend {
+  using pixel_type = Pixel;
+
+  mrl::matrix<pixel_type> image_;
+  mrl::matrix<std::uint8_t> mask_;
+};
 
 template<std::uint8_t Depth, cpl::pixel Pixel>
 class fragment {
@@ -17,22 +29,23 @@ public:
 
   using dot_type = dot_t<depth>;
   using matrix_type = mrl::matrix<dot_type>;
-  using step_type = mrl::size_type;
 
 public:
-  inline fragment(step_type hstep, step_type vstep) noexcept
-      : hstep_{hstep}
-      , vstep_{vstep}
-      , dots_{hstep, vstep} {
+  inline fragment(mrl::dimensions_t step) noexcept
+      : step_{step}
+      , dots_{step} {
+  }
+
+  inline fragment(matrix_type dots, mrl::dimensions_t step) noexcept
+      : step_{step}
+      , dots_{std::move(dots)} {
   }
 
   template<typename Alloc>
-  void blit(std::int32_t x,
-            std::int32_t y,
-            mrl::matrix<pixel_type, Alloc> const& image) {
-    ensure(x, y);
+  void blit(point_t pos, mrl::matrix<pixel_type, Alloc> const& image) {
+    ensure(pos, image.dimensions());
 
-    auto adj_x{x - x_}, adj_y{y - y_};
+    auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
     auto stride{dots_.width() - image.width()};
 
     auto out{dots_.data() + adj_x + adj_y * dots_.width()};
@@ -44,58 +57,99 @@ public:
     }
   }
 
-  [[nodiscard]] mrl::matrix<pixel_type> generate() const {
-    mrl::matrix<pixel_type> result{dots_.width(), dots_.height()};
-    auto out{result.data()};
+  void blit(point_t pos, fragment const& other) {
+    ensure(pos, other.dots_.dimensions());
+
+    auto& dots{other.dots_};
+    auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
+    auto stride{dots_.width() - dots.width()};
+
+    auto out{dots_.data() + adj_x + adj_y * dots_.width()};
+    for (auto first{dots.data()}, last{dots.end()}; first < last;
+         out += stride) {
+      for (auto end{first + dots.width()}; first < end; ++first, ++out) {
+        for (std::uint8_t i{0}; i < depth; ++i) {
+          (*out)[i] += (*first)[i];
+        }
+      }
+    }
+  }
+
+  [[nodiscard]] fragment_blend<pixel_type> blend() const {
+    mrl::matrix<pixel_type> image{dots_.dimensions()};
+    mrl::matrix<std::uint8_t> mask{dots_.dimensions()};
+
+    auto img_out{image.data()};
+    auto mask_out{mask.data()};
+
     for (auto first{dots_.data()}, last{dots_.end()}; first < last;
-         ++first, ++out) {
+         ++first, ++img_out, ++mask_out) {
       auto dot{&(*first)[0]};
       auto selected{std::max_element(dot, dot + depth)};
       if (*selected != 0) {
-        *out = {static_cast<typename pixel_type::value_type>(selected - dot)};
+        *img_out = {
+            static_cast<typename pixel_type::value_type>(selected - dot)};
+        *mask_out = *selected != 0 ? 1 : 0;
       }
     }
 
-    return result;
+    return {std::move(image), std::move(mask)};
+  }
+
+  [[nodiscard]] inline matrix_type const& dots() const noexcept {
+    return dots_;
+  }
+
+  [[nodiscard]] inline mrl::dimensions_t dimensions() const noexcept {
+    return dots_.dimensions();
   }
 
 private:
-  void ensure(std::int32_t x, std::int32_t y) {
-    step_type left{0}, right{0}, top{0}, bottom{0};
+  void ensure(point_t pos, mrl::dimensions_t const& dim) {
+    mrl::region_t region{};
 
-    auto extend{false};
-    if (x < x_) {
-      left = hstep_;
-      x_ -= hstep_;
-      extend = true;
-    }
-    else if (x > static_cast<std::int32_t>(x_ + dots_.width() - hstep_)) {
-      right = hstep_;
-      extend = true;
-    }
+    auto extend_h{extend<0>(region, pos, dim)};
+    auto extend_v{extend<1>(region, pos, dim)};
 
-    if (y < y_) {
-      top = vstep_;
-      y_ -= vstep_;
-      extend = true;
-    }
-    else if (y > static_cast<std::int32_t>(y_ + dots_.height() - vstep_)) {
-      bottom = vstep_;
-      extend = true;
-    }
-
-    if (extend) {
-      dots_ = dots_.extend(left, right, top, bottom);
+    if (extend_h || extend_v) {
+      dots_ = dots_.extend(region);
     }
   }
 
-private:
-  step_type hstep_;
-  step_type vstep_;
+  template<std::size_t Idx>
+  [[nodiscard]] bool extend(mrl::region_t& region,
+                            point_t pos,
+                            mrl::dimensions_t const& dim) noexcept {
+    if (get<Idx>(pos) < get<Idx>(zero_)) {
+      get<Idx>(region) = get_step<Idx>(get<Idx>(zero_) - get<Idx>(pos));
+      get<Idx>(zero_) -= get<Idx>(region);
 
+      return true;
+    }
+
+    auto required{get<Idx>(pos) + static_cast<std::int32_t>(get<Idx>(dim))};
+    if (required > 0) {
+      if (auto limit{get<Idx>(zero_) + get<Idx>(dots_.dimensions())};
+          static_cast<std::size_t>(required) > limit) {
+        get<Idx + 2>(region) = get_step<Idx>(required - limit);
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  template<std::size_t Idx>
+  [[nodiscard]] inline std::size_t get_step(std::size_t change) const noexcept {
+    auto step{get<Idx>(step_)};
+    return (change / step) + (change % step != 0 ? step : 0);
+  }
+
+private:
+  mrl::dimensions_t step_;
   matrix_type dots_;
 
-  std::int32_t x_{0};
-  std::int32_t y_{0};
+  point_t zero_;
 };
 } // namespace fgm

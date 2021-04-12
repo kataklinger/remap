@@ -47,11 +47,10 @@ private:
   using path_type = std::queue<path_node, path_containter>;
 
 public:
-  inline extractor(mrl::size_type width,
-                   mrl::size_type height,
+  inline extractor(mrl::dimensions_t dimensions,
                    allocator_type const& allocator)
       : allocator_{allocator}
-      , outline_{width, height}
+      , outline_{dimensions}
       , path_{path_containter{allocator}} {
   }
 

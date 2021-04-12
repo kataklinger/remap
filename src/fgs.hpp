@@ -2,30 +2,40 @@
 #pragma once
 
 #include "fgm.hpp"
+#include "kpe.hpp"
+#include "kpm.hpp"
+
+#include <execution>
+#include <stack>
 
 namespace fgs {
 namespace details {
   using grid_t = kpr::grid<1, 1, std::allocator<char>>;
 
   template<std::uint8_t Depth>
-  using snippet_t = std::pair<fgm::fragment<Depth, cpl::nat_cc> const*, grid_t>;
+  struct snippet {
+    fgm::fragment<Depth, cpl::nat_cc> const* fragment_{};
+    mrl::matrix<std::uint8_t> mask_;
+
+    grid_t grid_;
+  };
 
   template<std::uint8_t Depth>
-  [[nodiscard]] snippet_t<Depth>
+  [[nodiscard]] snippet<Depth>
       extract_single(fgm::fragment<Depth, cpl::nat_cc> const& fragment) {
-    auto image{fragment.generate()};
+    auto [image, mask]{fragment.blend()};
 
-    mrl::matrix<cpl::nat_cc> median{
-        image.width(), image.height(), image.get_allocator()};
+    mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
 
-    kpe::extractor<grid_t, 0> extractor{image.width(), image.height()};
-    return {&fragment, extractor.extract(image, median)};
+    kpe::extractor<grid_t, 0> extractor{image.dimensions()};
+    return {&fragment, std::move(mask), extractor.extract(image, median)};
   }
 
   template<std::uint8_t Depth, typename Iter>
   [[nodiscard]] auto extract_all(Iter first, Iter last) {
-    using snip_t = details::snippet_t<Depth>;
-    std::vector<snip_t> snippets(std::distance(first, last), snip_t{});
+    using snippet_type = details::snippet<Depth>;
+    std::vector<snippet_type> snippets(std::distance(first, last),
+                                       snippet_type{});
 
     std::transform(
         std::execution::par, first, last, snippets.begin(), [](auto& fragment) {
@@ -37,7 +47,9 @@ namespace details {
 
   struct match_config {
     using allocator_type = std::allocator<char>;
-    static constexpr std::size_t weight_switch{100};
+
+    static constexpr std::size_t weight_switch{
+        std::numeric_limits<std::size_t>::max()};
     static constexpr std::size_t region_votes{3};
 
     [[nodiscard]] inline allocator_type get_allocator() const noexcept {
@@ -51,57 +63,88 @@ namespace details {
 
   class delta {
   public:
+    struct match_value {
+      std::uint8_t cross_;
+      std::size_t keypoints_;
+
+      friend auto operator<=>(match_value const&, match_value const&) = default;
+
+      inline explicit match_value(std::size_t raw) noexcept
+          : cross_{raw & 3}
+          , keypoints_{raw >> 2} {
+      }
+    };
+
+    struct match {
+      cdt::offset_t offset_;
+      match_value value_;
+
+      inline match(
+          std::pair<cdt::offset_t const, std::size_t> const& pair) noexcept
+          : offset_{std::get<0>(pair)}
+          , value_(std::get<1>(pair)) {
+      }
+    };
+
     using total_t = kpm::totalizator_t<match_config>;
 
   public:
-    inline explicit delta(couple_t edge) noexcept
-        : edge_{edge} {
+    inline explicit delta(couple_t couple) noexcept
+        : couple_{couple} {
     }
 
     inline void update_raw(kpm::ticket_t<match_config> const& ticket) noexcept {
       for (auto& [offset, count] : ticket) {
-        matches_[offset] += count;
-        max_count_ = std::max(max_count_, count);
+        matches_[offset] += (count << 2);
       }
     }
 
     inline void crossmatch(cdt::offset_t const& offset) noexcept {
-      matches_[offset] += max_count_;
+      ++matches_[offset];
     }
 
-    [[nodiscard]] inline couple_t edge() const noexcept {
-      return edge_;
+    [[nodiscard]] inline couple_t couple() const noexcept {
+      return couple_;
+    }
+
+    template<typename Ty>
+    [[nodiscard]] inline auto
+        couple(std::vector<Ty> const& data) const noexcept {
+      auto [left, right]{couple_};
+      return std::tuple<Ty const&, Ty const&>{data[left], data[right]};
     }
 
     [[nodiscard]] inline total_t const& raw() const noexcept {
       return matches_;
     }
 
-    [[nodiscard]] inline cdt::offset_t best() const noexcept {
-      return std::max_element(
-                 matches_.begin(),
-                 matches_.end(),
-                 [](auto& lhs, auto& rhs) { return lhs.second < rhs.second; })
-          ->first;
+    [[nodiscard]] inline std::optional<cdt::offset_t> offset() const noexcept {
+      if (matches_.empty()) {
+        return {};
+      }
+
+      auto best{std::max_element(
+          matches_.begin(), matches_.end(), [](auto& lhs, auto& rhs) {
+            return match_value{lhs.second} < match_value{rhs.second};
+          })};
+
+      return best->first;
     }
 
   private:
-    couple_t edge_;
-
+    couple_t couple_;
     total_t matches_;
-    std::size_t max_count_{0};
   };
 
   template<std::uint8_t Depth>
-  [[nodiscard]] auto
-      build_deltas(std::vector<snippet_t<Depth>> const& snippets) {
+  [[nodiscard]] auto build_deltas(std::vector<snippet<Depth>> const& snippets) {
     std::vector<details::delta> deltas;
 
     auto segments{static_cast<std::int16_t>(snippets.size())};
     deltas.reserve((segments * segments - segments) / 2);
 
-    for (int16_t i{segments - 1}; i >= 0; --i) {
-      for (int16_t j{segments - 1}; j > i; --j) {
+    for (std::int16_t i{0}; i < segments; ++i) {
+      for (auto j{i + 1}; j < segments; ++j) {
         deltas.emplace_back(couple_t{i, j});
       }
     }
@@ -110,16 +153,19 @@ namespace details {
   }
 
   template<std::uint8_t Depth>
-  void match_all(std::vector<snippet_t<Depth>> const& snippets,
+  void match_all(std::vector<snippet<Depth>> const& snippets,
                  std::vector<delta>& deltas) {
     std::for_each(std::execution::par,
                   deltas.begin(),
                   deltas.end(),
                   [&snippets](auto& d) {
-                    auto [left, right]{d.edge()};
-                    auto ticket{kpm::vote(details::match_config{},
-                                          std::get<1>(snippets[left])[0],
-                                          std::get<1>(snippets[right])[0])};
+                    auto [left, right]{d.couple(snippets)};
+
+                    auto ticket{kpm::match(details::match_config{},
+                                           left.grid_[0],
+                                           left.mask_,
+                                           right.grid_[0],
+                                           right.mask_)};
                     d.update_raw(ticket);
                   });
   }
@@ -144,11 +190,11 @@ namespace details {
   void crossmatch_all(std::vector<delta>& deltas,
                       std::size_t segments) noexcept {
     for (auto i{deltas.begin()}; i < deltas.end(); ++i) {
-      auto [ix, iy]{i->edge()};
+      auto [ix, iy]{i->couple()};
 
-      for (auto j{i + 1}; true; ++j) {
-        if (auto [jx, jy]{j->edge()}; jx == ix) {
-          auto k{deltas[jx * (2 * segments - jx - 1) / 2 + jy - 1]};
+      for (auto j{i + 1}; j < deltas.end(); ++j) {
+        if (auto [jx, jy]{j->couple()}; jx == ix) {
+          auto k{deltas[iy * (2 * segments - iy - 1) / 2 + jy - iy - 1]};
 
           crossmatch_single(*i, *j, k);
         }
@@ -158,15 +204,178 @@ namespace details {
       }
     }
   }
+
+  template<typename Ty>
+  concept walker =
+      std::invocable<Ty>&& std::invocable<Ty, std::uint16_t, cdt::offset_t>;
+
+  class graph {
+  private:
+    struct node;
+
+    struct edge {
+      std::uint16_t link_;
+      cdt::offset_t offset_;
+    };
+
+    struct node {
+      bool visited_;
+      std::vector<edge> edges_;
+    };
+
+    struct state {
+      std::uint16_t node_{};
+      std::uint16_t edge_{};
+      cdt::offset_t offset_{};
+    };
+
+    using history_t = std::stack<state>;
+
+  public:
+    graph(std::uint16_t size)
+        : nodes_{size, node{}} {
+    }
+
+    void add_edge(couple_t couple, cdt::offset_t const& offset) {
+      auto [idx, jdx]{couple};
+
+      nodes_[idx].edges_.emplace_back(jdx, offset);
+      nodes_[jdx].edges_.emplace_back(idx, -offset);
+    }
+
+    template<walker Walker>
+    void process(Walker& w) {
+      for (std::uint16_t i{0}; i < nodes_.size(); ++i) {
+        if (!nodes_[i].visited_) {
+          w();
+
+          walk({i, 0, {}}, w);
+        }
+      }
+    }
+
+  private:
+    template<walker Walker>
+    void walk(state active, Walker& w) {
+      for (history_t hist; true;) {
+        if (auto& current{nodes_[active.node_]}; current.visited_) {
+          if (!backtrack(active, hist)) {
+            break;
+          }
+        }
+        else {
+          current.visited_ = true;
+
+          w(active.node_, active.offset_);
+
+          if (active.edge_ < current.edges_.size()) {
+            hist.emplace(active.node_, active.edge_ + 1, active.offset_);
+            active = *advance(active, current);
+          }
+          else if (!backtrack(active, hist)) {
+            break;
+          }
+        }
+      }
+    }
+
+    [[nodiscard]] inline bool backtrack(state& active,
+                                        history_t& hist) noexcept {
+      while (!hist.empty()) {
+        auto next{advance(hist.top())};
+        hist.pop();
+
+        if (next) {
+          active = *next;
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    [[nodiscard]] inline std::optional<state>
+        advance(state const& s) const noexcept {
+      return advance(s, nodes_[s.node_]);
+    }
+
+    [[nodiscard]] inline std::optional<state>
+        advance(state const& s, node const& current) const noexcept {
+      if (s.edge_ < current.edges_.size()) {
+        auto& next{current.edges_[s.edge_]};
+        return std::optional<state>{
+            std::in_place, next.link_, s.edge_, s.offset_ + next.offset_};
+      }
+
+      return {};
+    }
+
+  private:
+    std::vector<node> nodes_;
+  };
+
+  template<std::uint8_t Depth, cpl::pixel Pixel>
+  class splicer {
+  public:
+    static inline constexpr auto depth{Depth};
+
+    using pixel_type = Pixel;
+    using fragment_t = fgm::fragment<depth, pixel_type>;
+
+    using snippet_type = snippet<depth>;
+
+  public:
+    inline explicit splicer(std::vector<snippet_type> const& snippets) noexcept
+        : snippets_{&snippets} {
+    }
+
+    inline void operator()() {
+      result_.emplace_back(mrl::dimensions_t{1, 1});
+    }
+
+    inline void operator()(std::uint16_t snippet, cdt::offset_t offset) {
+      result_.back().blit(offset, *(*snippets_)[snippet].fragment_);
+    }
+
+    [[nodiscard]] inline std::vector<fragment_t> const&
+        result() const noexcept {
+      return result_;
+    }
+
+    [[nodiscard]] inline std::vector<fragment_t>& result() noexcept {
+      return result_;
+    }
+
+  private:
+    std::vector<snippet_type> const* snippets_;
+    std::vector<fragment_t> result_;
+  };
+
+  [[nodiscard]] graph build_graph(std::vector<delta> const& deltas,
+                                  std::uint16_t size) {
+    graph result{size};
+    for (auto& d : deltas) {
+      if (auto off{d.offset()}; off) {
+        result.add_edge(d.couple(), *off);
+      }
+    }
+
+    return result;
+  }
 } // namespace details
 
-template<std::uint8_t Depth, typename Iter>
-[[nodiscard]] mrl::matrix<cpl::nat_cc> splice(Iter first, Iter last) {
+template<std::uint8_t Depth, cpl::pixel Pixel, typename Iter>
+[[nodiscard]] std::vector<fgm::fragment<Depth, Pixel>> splice(Iter first,
+                                                              Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
+
   details::match_all(snippets, deltas);
   details::crossmatch_all(deltas, snippets.size());
 
-  return {};
+  details::splicer<Depth, Pixel> spliced{snippets};
+  build_graph(deltas, snippets.size()).process(spliced);
+
+  return std::move(spliced.result());
 }
 } // namespace fgs

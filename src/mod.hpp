@@ -209,7 +209,7 @@ private:
   }
 
   [[nodiscard]] motion_map refine(contours_type const& contours) const {
-    constexpr cdt::offset_t nomove{0, 0};
+    constexpr cdt::offset_t nomove{};
 
     motion_map motions{tracker_.get_allocator()};
     for (auto& [id, offsets] : tracker_) {
@@ -223,7 +223,7 @@ private:
           });
 
       if (candidate != nomove && count > contours[id - 1].perimeter() / 2) {
-        if (std::get<1>(candidate) > 0) {
+        if (candidate.y_ > 0) {
           count = count;
         }
         motions[id] = candidate;

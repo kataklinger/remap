@@ -1,8 +1,8 @@
 ﻿
 #include "cte.hpp"
-#include "fgc.hpp"
 #include "fgm.hpp"
 #include "fgs.hpp"
+#include "frc.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
@@ -20,6 +20,8 @@
 
 inline constexpr std::size_t screen_width = 388;
 inline constexpr std::size_t screen_height = 312;
+inline constexpr mrl::dimensions_t screen_dimensions{screen_width,
+                                                     screen_height};
 
 inline std::uint64_t now() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -57,7 +59,7 @@ struct match_config {
 std::filesystem::path const ddir{"../../../data/"};
 
 mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
-  mrl::matrix<cpl::nat_cc> temp{screen_width, screen_height};
+  mrl::matrix<cpl::nat_cc> temp{screen_dimensions};
 
   std::ifstream input;
   input.open(ddir / filename, std::ios::in | std::ios::binary);
@@ -65,20 +67,67 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
     return temp;
   }
 
-  input.read(reinterpret_cast<char*>(temp.data()),
-             static_cast<std::size_t>(temp.width()) * temp.height());
+  input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
   input.close();
 
-  return temp.crop(31, 53, 55, 105);
+  return temp.crop({31, 55, 55, 105});
 }
 
 void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
   png::write(ddir / filename, image.width(), image.height(), image.data());
 }
 
+template<typename Iter>
+void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
+  for (auto i{0}; first != last; ++first, ++i) {
+    std::fstream output;
+    output.open(dir / std::to_string(i), std::ios::out | std::ios::binary);
+
+    auto dim{first->dots().dimensions()};
+    output.write(reinterpret_cast<char const*>(&dim),
+                 sizeof(mrl::dimensions_t));
+
+    output.write(reinterpret_cast<char const*>(first->dots().data()),
+                 first->dots().dimensions().area() * sizeof(fgm::dot_t<16>));
+
+    output.close();
+  }
+}
+
+auto read_fragments(std::filesystem::path dir) {
+  using namespace std::filesystem;
+  using fragment_t = fgm::fragment<16, cpl::nat_cc>;
+
+  std::vector<std::filesystem::path> files;
+  std::copy(
+      directory_iterator(dir), directory_iterator(), back_inserter(files));
+  std::sort(files.begin(), files.end(), [](auto& a, auto& b) {
+    return std::stoi(a.filename().string()) < std::stoi(b.filename().string());
+  });
+
+  std::vector<fragment_t> result;
+  for (auto& file : files) {
+    std::ifstream input;
+    input.open(file, std::ios::in | std::ios::binary);
+
+    mrl::dimensions_t dim{};
+    input.read(reinterpret_cast<char*>(&dim), sizeof(mrl::dimensions_t));
+
+    fragment_t::matrix_type temp{dim};
+    input.read(reinterpret_cast<char*>(temp.data()),
+               dim.area() * sizeof(fgm::dot_t<16>));
+
+    input.close();
+
+    result.emplace_back(std::move(temp), mrl::dimensions_t{1, 1});
+  }
+
+  return result;
+}
+
 class file_feed {
 public:
-  using image_type = fgc::collector::image_type;
+  using image_type = frc::collector::image_type;
   using allocator_type = image_type::allocator_type;
 
 private:
@@ -94,7 +143,7 @@ public:
              std::stoi(b.filename().string());
     });
 
-    files_.resize(5000);
+    // files_.resize(900);
 
     next_ = files_.begin();
   }
@@ -120,8 +169,7 @@ public:
       last_time_ = this_time_;
     }
 
-    mrl::matrix<cpl::nat_cc, allocator_type> temp{
-        screen_width, screen_height, alloc};
+    mrl::matrix<cpl::nat_cc, allocator_type> temp{screen_dimensions, alloc};
 
     std::ifstream input;
     input.open(*current, std::ios::in | std::ios::binary);
@@ -129,11 +177,10 @@ public:
       return temp;
     }
 
-    input.read(reinterpret_cast<char*>(temp.data()),
-               static_cast<std::size_t>(temp.width()) * temp.height());
+    input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
     input.close();
 
-    return temp.crop(31, 53, 55, 105);
+    return temp.crop({31, 55, 55, 105});
   }
 
 private:
@@ -152,11 +199,11 @@ int main() {
 
   using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>, 16>;
 
-  kpe_t extractor1{image1.width(), image1.height()};
-  kpe_t extractor2{image1.width(), image1.height()};
+  kpe_t extractor1{image1.dimensions()};
+  kpe_t extractor2{image1.dimensions()};
 
-  mrl::matrix<cpl::nat_cc> median1{image1.width(), image1.height()};
-  mrl::matrix<cpl::nat_cc> median2{image1.width(), image1.height()};
+  mrl::matrix<cpl::nat_cc> median1{image1.dimensions()};
+  mrl::matrix<cpl::nat_cc> median2{image1.dimensions()};
 
   perf_test(
       [&image1, &median1, &extractor1] {
@@ -181,15 +228,15 @@ int main() {
       false);
 
   cte::extractor<cpl::nat_cc>::allocator_type alloc{};
-  cte::extractor<cpl::nat_cc> cext1{image1.width(), image1.height(), alloc};
-  cte::extractor<cpl::nat_cc> cext2{image1.width(), image1.height(), alloc};
+  cte::extractor<cpl::nat_cc> cext1{image1.dimensions(), alloc};
+  cte::extractor<cpl::nat_cc> cext2{image1.dimensions(), alloc};
 
   perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
             perf_loops,
             "contour",
             false);
 
-  mrl::matrix<cpl::nat_cc> recovered{image1.width(), image1.height()};
+  mrl::matrix<cpl::nat_cc> recovered{image1.dimensions()};
 
   auto contours1{cext1.extract(median1)};
   auto contours2{cext2.extract(median2)};
@@ -198,8 +245,8 @@ int main() {
   auto motion{
       mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
 
-  mrl::matrix<cpl::rgb_bc> rgb_mh{image1.width(), image1.height()};
-  mrl::matrix<cpl::rgb_bc> rgb_mv{image1.width(), image1.height()};
+  mrl::matrix<cpl::rgb_bc> rgb_mh{image1.dimensions()};
+  mrl::matrix<cpl::rgb_bc> rgb_mv{image1.dimensions()};
 
   perf_test(
       [&mdet, &cext1, &cext2, &offset, &contours2]() {
@@ -237,7 +284,7 @@ int main() {
     }
   }
 
-  mrl::matrix<cpl::nat_cc> diff{image1.width(), image1.height()};
+  mrl::matrix<cpl::nat_cc> diff{image1.dimensions()};
   for (auto& region : grid1.regions()) {
     for (auto& [key, points] : region.points()) {
       cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
@@ -248,12 +295,12 @@ int main() {
     }
   }
 
-  fgm::fragment<16, cpl::nat_cc> frag{image1.width(), image1.height()};
+  fgm::fragment<16, cpl::nat_cc> frag{image1.dimensions()};
 
-  frag.blit(0, 0, image1);
-  frag.blit(std::get<0>(*offset), std::get<1>(*offset), image2);
+  frag.blit({0, 0}, image1);
+  frag.blit(*offset, image2);
 
-  auto merged{frag.generate()};
+  auto merged{frag.blend().image_};
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
@@ -277,13 +324,17 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  fgc::collector collector{image1.width(), image1.height()};
-  collector.collect(file_feed{ddir / "seq"});
-  auto map{collector.current().generate()};
+  // frc::collector collector{image1.dimensions()};
+  // collector.collect(file_feed{ddir / "seq"});
 
-  auto& fragments{collector.fragments()};
-  auto spliced{fgs::splice<fgc::collector::color_depth>(fragments.begin(),
-                                                        fragments.end())};
+  // auto& fragments{collector.fragments()};
+  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+
+  auto fragments{read_fragments(ddir / "fgm")};
+
+  auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
+      fragments.begin(), fragments.end())};
+  auto map{spliced.front().blend().image_};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("map.png", rgb_mp);
