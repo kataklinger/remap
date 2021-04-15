@@ -79,7 +79,7 @@ private:
   inline static constexpr auto reg_overlap{Overlap};
 
 public:
-  inline extractor(mrl::dimensions_t dimensions)
+  explicit inline extractor(mrl::dimensions_t const& dimensions)
       : temp_{dimensions}
       , reg_width_{dimensions.width_ / grid_type::width - reg_overlap / 2}
       , reg_height_{dimensions.height_ / grid_type::height - reg_overlap / 2}

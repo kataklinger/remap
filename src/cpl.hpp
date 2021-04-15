@@ -20,6 +20,8 @@ struct nat_ordered_value_t {};
 
 struct grs_intensity_value_t {};
 
+struct mon_bit_value_t {};
+
 template<pixel_color Ty, typename Tag>
 struct color_t {
   using value_type = Ty;
@@ -50,6 +52,8 @@ using nat_cc = color_t<std::uint8_t, nat_coded_color_t>;
 using nat_ov = color_t<std::uint8_t, nat_ordered_value_t>;
 
 using grs_iv = color_t<float, grs_intensity_value_t>;
+
+using mon_bv = color_t<std::uint8_t, mon_bit_value_t>;
 
 inline constexpr rgb_bc native_to_blend_map[] = {{0x00000000},
                                                  {0x00FFFFFF},

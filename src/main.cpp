@@ -125,10 +125,11 @@ auto read_fragments(std::filesystem::path dir) {
   return result;
 }
 
+template<typename Image>
 class file_feed {
 public:
-  using image_type = frc::collector::image_type;
-  using allocator_type = image_type::allocator_type;
+  using image_type = Image;
+  using allocator_type = typename image_type::allocator_type;
 
 private:
   using vector_type = std::vector<std::filesystem::path>;
@@ -152,7 +153,11 @@ public:
     return next_ != files_.end();
   }
 
-  [[nodiscard]] inline image_type produce(allocator_type alloc) {
+  [[nodiscard]] inline image_type produce() {
+    return produce(allocator_type{});
+  }
+
+  [[nodiscard]] image_type produce(allocator_type alloc) {
     auto current{next_++};
 
     auto count = current - files_.begin();
@@ -324,13 +329,13 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  // frc::collector collector{image1.dimensions()};
-  // collector.collect(file_feed{ddir / "seq"});
+  frc::collector collector{image1.dimensions()};
+  collector.collect(file_feed<frc::collector::image_type>{ddir / "seq"});
 
-  // auto& fragments{collector.fragments()};
-  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+  auto& fragments{collector.fragments()};
+  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
 
-  auto fragments{read_fragments(ddir / "fgm")};
+  // auto fragments{read_fragments(ddir / "fgm")};
 
   auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
       fragments.begin(), fragments.end())};
