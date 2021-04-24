@@ -1,4 +1,5 @@
 ﻿
+#include "aws.hpp"
 #include "cte.hpp"
 #include "fgm.hpp"
 #include "fgs.hpp"
@@ -135,7 +136,9 @@ private:
   using vector_type = std::vector<std::filesystem::path>;
 
 public:
-  explicit file_feed(std::filesystem::path const& root) {
+  explicit file_feed(std::filesystem::path const& root,
+                     std::optional<mrl::region_t> crop = {})
+      : crop_{crop} {
     using namespace std::filesystem;
     std::copy(
         directory_iterator(root), directory_iterator(), back_inserter(files_));
@@ -185,12 +188,18 @@ public:
     input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
     input.close();
 
-    return temp.crop({31, 55, 55, 105});
+    if (crop_) {
+      return temp.crop({31, 55, 55, 105});
+    }
+
+    return temp;
   }
 
 private:
   vector_type files_;
   vector_type::iterator next_;
+
+  std::optional<mrl::region_t> crop_;
 
   std::uint64_t start_time_{0};
   std::uint64_t last_time_{0};
@@ -329,8 +338,16 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
+  auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+                        {screen_width, screen_height})};
+
+  if (!window) {
+    return 0;
+  }
+
   frc::collector collector{image1.dimensions()};
-  collector.collect(file_feed<frc::collector::image_type>{ddir / "seq"});
+  collector.collect(
+      file_feed<frc::collector::image_type>{ddir / "seq", *window});
 
   auto& fragments{collector.fragments()};
   write_fragments(ddir / "fgm", fragments.begin(), fragments.end());

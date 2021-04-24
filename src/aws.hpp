@@ -2,7 +2,9 @@
 #pragma once
 
 #include "cpl.hpp"
+#include "cte.hpp"
 #include "ifd.hpp"
+#include "mrl.hpp"
 
 namespace aws {
 namespace details {
@@ -12,7 +14,7 @@ namespace details {
   template<typename Image>
   void compare(Image const& previous, Image const& current, heatmap_t& output) {
     auto o{output.data()};
-    for (auto p{previous.data()}; c{current.data()}, e{current.end()}; c < e;
+    for (auto p{previous.data()}, c{current.data()}, e{current.end()}; c < e;
          ++p, ++c, ++o) {
       if (*p != *c) {
         *o = {1};
@@ -22,9 +24,11 @@ namespace details {
 
   [[nodiscard]] inline contour_t
       get_best(std::vector<contour_t>&& contours) noexcept {
-    return *std::max_element(contours, [](auto& lhs, auto& rhs) {
-      return lhs.area() * lhs.color() < rhs.area() * rhs.color()
-    });
+    return *std::max_element(
+        contours.begin(), contours.end(), [](auto& lhs, auto& rhs) {
+          return lhs.area() * value(lhs.color()) <
+                 rhs.area() * value(rhs.color());
+        });
   }
 } // namespace details
 
@@ -37,9 +41,9 @@ template<typename Feeder>
 
   std::optional<mrl::region_t> result{};
   if (feed.has_more()) {
-    auto const min_area{2 * dimensions.area() / 5};
-    auto const min_height{2 * dimensions.height() / 3};
-    auto const min_width{2 * dimensions.width() / 3};
+    auto const min_area{dimensions.area() / 3};
+    auto const min_height{2 * dimensions.height_ / 5};
+    auto const min_width{2 * dimensions.width_ / 3};
 
     auto pimage{feed.produce()};
     for (std::size_t area{}, stagnation{};
@@ -48,14 +52,13 @@ template<typename Feeder>
 
       details::compare(pimage, cimage, heatmap);
       if (auto contour{details::get_best(extractor.extract(heatmap))};
-          contour.color() != 0) {
+          value(contour.color()) != 0) {
         if (contour.area() > area) {
           stagnation = 0;
           area = contour.area();
 
           if (auto window{contour.enclosure()};
-              result || window.area() > min_area &&
-                            window.height() > min_height &&
+              result || area > min_area && window.height() > min_height &&
                             window.width() > min_width) {
             result = window;
           }
@@ -70,6 +73,11 @@ template<typename Feeder>
     }
   }
 
-  return result;
+  return mrl::region_t{
+      result->left_ + 1,
+      result->top_ + 1,
+      result->right_ - 1,
+      result->bottom_ - 1,
+  };
 }
 } // namespace aws
