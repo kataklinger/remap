@@ -35,8 +35,20 @@ public:
     data_.resize(dimensions.area());
   }
 
+  inline matrix(dimensions_t dimensions,
+                const value_type& value,
+                allocator_type const& alloc)
+      : dimensions_{dimensions}
+      , data_{alloc} {
+    data_.resize(dimensions.area(), value);
+  }
+
   inline matrix(dimensions_t dimensions)
       : matrix(dimensions, allocator_type{}) {
+  }
+
+  inline matrix(dimensions_t dimensions, const value_type& value)
+      : matrix(dimensions, value, allocator_type{}) {
   }
 
   [[nodiscard]] inline value_type& operator[](size_type index) noexcept {

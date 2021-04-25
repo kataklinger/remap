@@ -6,25 +6,54 @@
 #include "ifd.hpp"
 #include "mrl.hpp"
 
+#include <intrin.h>
+
 namespace aws {
 namespace details {
   using heatmap_t = mrl::matrix<cpl::mon_bv>;
   using contour_t = ctr::contour<cpl::mon_bv>;
 
   template<typename Image>
-  void compare(Image const& previous, Image const& current, heatmap_t& output) {
+  inline constexpr auto pixel_size_v{sizeof(typename Image::value_type)};
+
+  template<typename Mm, typename Image>
+  inline constexpr auto step_size_v{sizeof(Mm) / pixel_size_v<Image>};
+
+  template<typename Mm, typename Image>
+  inline typename Image::value_type const*
+      adjust_end(typename Image::value_type const* end) noexcept {
+    return end - reinterpret_cast<std::uintptr_t>(end) % (sizeof(Mm) / 8) /
+                     step_size_v<Mm, Image>;
+  }
+
+  template<typename Image>
+  void compare(Image const& previous,
+               Image const& current,
+               heatmap_t& output) noexcept {
+    using mm_t = __m256i;
+    constexpr auto step{step_size_v<mm_t, Image>};
+
     auto o{output.data()};
-    for (auto p{previous.data()}, c{current.data()}, e{current.end()}; c < e;
-         ++p, ++c, ++o) {
+    auto p{previous.data()}, c{current.data()};
+
+    for (auto e{adjust_end<mm_t, Image>(current.end())}; c < e;
+         p += step, c += step, o += step) {
+      *reinterpret_cast<mm_t*>(o) = _mm256_and_si256(
+          *reinterpret_cast<mm_t const*>(o),
+          _mm256_cmpeq_epi8(*reinterpret_cast<mm_t const*>(p),
+                            *reinterpret_cast<mm_t const*>(c)));
+    }
+
+    for (auto e{current.end()}; c < e; ++p, ++c, ++o) {
       if (*p != *c) {
-        *o = {1};
+        *o = {0};
       }
     }
   }
 
   [[nodiscard]] inline contour_t
       get_best(std::vector<contour_t>&& contours) noexcept {
-    return *std::max_element(
+    return *std::min_element(
         contours.begin(), contours.end(), [](auto& lhs, auto& rhs) {
           return lhs.area() * value(lhs.color()) <
                  rhs.area() * value(rhs.color());
@@ -37,7 +66,7 @@ template<typename Feeder>
     scan(Feeder&& feed, mrl::dimensions_t const& dimensions) requires(
         ifd::feeder<std::decay_t<Feeder>>) {
   cte::extractor<cpl::mon_bv> extractor{dimensions};
-  details::heatmap_t heatmap{dimensions};
+  details::heatmap_t heatmap{dimensions, {1}};
 
   std::optional<mrl::region_t> result{};
   if (feed.has_more()) {
@@ -52,7 +81,7 @@ template<typename Feeder>
 
       details::compare(pimage, cimage, heatmap);
       if (auto contour{details::get_best(extractor.extract(heatmap))};
-          value(contour.color()) != 0) {
+          value(contour.color()) == 0) {
         if (contour.area() > area) {
           stagnation = 0;
           area = contour.area();
