@@ -1,4 +1,6 @@
 
+// fragment splicing
+
 #pragma once
 
 #include "fgm.hpp"

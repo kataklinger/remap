@@ -1,3 +1,6 @@
+
+// keypoint extraction (v2)
+
 #pragma once
 
 #include <intrin.h>

@@ -1,4 +1,6 @@
 
+// keypoint representation
+
 #pragma once
 
 #include "mrl.hpp"

@@ -1,4 +1,6 @@
 
+// action-window scanner
+
 #pragma once
 
 #include "cpl.hpp"

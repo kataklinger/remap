@@ -1,4 +1,6 @@
 
+// color pallet library
+
 #pragma once
 
 #include <algorithm>

@@ -1,4 +1,6 @@
 
+// contour representation
+
 #pragma once
 
 #include "cdt.hpp"
