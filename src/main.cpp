@@ -1,4 +1,5 @@
 ﻿
+#include "arf.hpp"
 #include "aws.hpp"
 #include "cte.hpp"
 #include "fgm.hpp"
@@ -338,28 +339,34 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-                        {screen_width, screen_height})};
+  // auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+  //                      {screen_width, screen_height})};
 
-  if (!window) {
-    return 0;
-  }
+  // if (!window) {
+  //  return 0;
+  //}
 
-  frc::collector collector{image1.dimensions()};
-  collector.collect(
-      file_feed<frc::collector::image_type>{ddir / "seq", *window});
+  // frc::collector collector{image1.dimensions()};
+  // collector.collect(
+  //    file_feed<frc::collector::image_type>{ddir / "seq", *window});
 
-  auto& fragments{collector.fragments()};
-  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+  // auto& fragments{collector.fragments()};
+  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
 
-  // auto fragments{read_fragments(ddir / "fgm")};
+  auto fragments{read_fragments(ddir / "fgm")};
 
   auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
       fragments.begin(), fragments.end())};
+
+  auto filtered{arf::filter<15>(spliced.front())};
   auto map{spliced.front().blend().image_};
 
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_ft =
+      filtered.map([](auto c) noexcept { return native_to_blend(c); });
+
   write_rgb("map.png", rgb_mp);
+  write_rgb("filtered.png", rgb_ft);
 
   return 0;
 }
