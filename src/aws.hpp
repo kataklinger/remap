@@ -70,6 +70,8 @@ template<typename Feeder>
   cte::extractor<cpl::mon_bv> extractor{dimensions};
   details::heatmap_t heatmap{dimensions, {1}};
 
+  auto mask{[](auto px, auto idx) { return value(px) != 0xff; }};
+
   std::optional<mrl::region_t> result{};
   if (feed.has_more()) {
     auto const min_area{dimensions.area() / 3};
@@ -82,7 +84,7 @@ template<typename Feeder>
       auto cimage{feed.produce()};
 
       details::compare(pimage, cimage, heatmap);
-      if (auto contour{details::get_best(extractor.extract(heatmap))};
+      if (auto contour{details::get_best(extractor.extract(heatmap, mask))};
           value(contour.color()) == 0) {
         if (contour.area() > area) {
           stagnation = 0;

@@ -57,7 +57,13 @@ public:
   }
 
 public:
-  [[nodiscard]] contours extract(mrl::matrix<pixel_type> const& image) {
+  [[nodiscard]] inline contours extract(mrl::matrix<pixel_type> const& image) {
+    return extract(image, [](auto px, auto idx) { return true; });
+  }
+
+  template<std::predicate<pixel_type, std::size_t> Pred>
+  [[nodiscard]] contours extract(mrl::matrix<pixel_type> const& image,
+                                 Pred pred) {
     clear_outline();
 
     contours extracted{allocator_};
@@ -66,7 +72,7 @@ public:
          position < last;
          position += image.width()) {
 
-      process_row(image.data(), position, extracted);
+      process_row(image.data(), position, extracted, pred);
     }
 
     return extracted;
@@ -77,17 +83,18 @@ public:
   }
 
 private:
+  template<typename Pred>
   inline void process_row(pixel_type const* image,
-                          pixel_type const* position,
-                          contours& output) {
+                          pixel_type const* pos,
+                          contours& output,
+                          Pred& pred) {
     auto outline{outline_.data()};
 
-    for (auto last{position + outline_.width() - 2}; position < last;
-         ++position) {
-      if (outline[position - image].id_ == 0) {
+    for (auto last{pos + outline_.width() - 2}; pos < last; ++pos) {
+      if (auto p{pos - image}; outline[p].id_ == 0 && pred(*pos, p)) {
         output.push_back(extract_single(
             image,
-            position,
+            pos,
             static_cast<typename cell_type::id_type>(output.size() + 1)));
       }
     }

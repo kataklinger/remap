@@ -154,5 +154,4 @@ private:
 
   std::vector<value_type, allocator_type> data_;
 };
-
 } // namespace mrl
