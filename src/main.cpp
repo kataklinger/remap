@@ -365,7 +365,7 @@ int main() {
   fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
 
   auto foreground{filter.extract(image1, {1813, 1217})};
-  auto mask{fde::generate(foreground, image1.dimensions())};
+  auto mask{fde::mask(foreground, image1.dimensions())};
 
   auto rgb_msk = mask.map(
       [](auto c) noexcept { return cpl::native_to_blend({value(c)}); });

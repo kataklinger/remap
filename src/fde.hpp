@@ -82,10 +82,8 @@ public:
 
     auto area_limit{frame.dimensions().area() / 5};
 
-    auto forground{
-        contours_.extract(frame, [mask = mask_.data()](auto px, auto idx) {
-          return mask[idx] == 0;
-        })};
+    auto forground{contours_.extract(
+        frame, [m = mask_.data()](auto px, auto idx) { return m[idx] == 0; })};
 
     forground.erase(
         std::remove_if(forground.begin(),
@@ -117,8 +115,8 @@ public:
 };
 
 template<typename Contour, typename Alloc>
-[[nodiscard]] auto generate(std::vector<Contour, Alloc> const& forground,
-                            mrl::dimensions_t const& dim) {
+[[nodiscard]] auto mask(std::vector<Contour, Alloc> const& forground,
+                        mrl::dimensions_t const& dim) {
   using alloc_t = all::rebind_alloc_t<Alloc, cpl::mon_bv>;
 
   mrl::matrix<cpl::mon_bv, alloc_t> result{dim, forground.get_allocator()};
