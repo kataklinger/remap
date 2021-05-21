@@ -1,7 +1,7 @@
 ﻿
-#include "arf.hpp"
 #include "aws.hpp"
 #include "cte.hpp"
+#include "fde.hpp"
 #include "fgm.hpp"
 #include "fgs.hpp"
 #include "frc.hpp"
@@ -72,7 +72,7 @@ mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
   input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
   input.close();
 
-  return temp.crop({31, 55, 55, 105});
+  return temp.crop({32, 56, 55, 106});
 }
 
 void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
@@ -355,18 +355,22 @@ int main() {
 
   auto fragments{read_fragments(ddir / "fgm")};
 
-  auto spliced{fgs::splice<frc::collector::color_depth, cpl::nat_cc>(
-      fragments.begin(), fragments.end())};
+  auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
+                                                        fragments.end())};
 
-  auto filtered{arf::filter<15>(spliced.front())};
   auto map{spliced.front().blend().image_};
-
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_ft =
-      filtered.map([](auto c) noexcept { return native_to_blend(c); });
-
   write_rgb("map.png", rgb_mp);
-  write_rgb("filtered.png", rgb_ft);
+
+  fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
+
+  auto foreground{filter.extract(image1, {1813, 1217})};
+  auto mask{fde::generate(foreground, image1.dimensions())};
+
+  auto rgb_msk = mask.map(
+      [](auto c) noexcept { return cpl::native_to_blend({value(c)}); });
+
+  write_rgb("mask.png", rgb_msk);
 
   return 0;
 }

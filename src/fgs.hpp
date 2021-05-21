@@ -316,13 +316,12 @@ namespace details {
     std::vector<node> nodes_;
   };
 
-  template<std::uint8_t Depth, cpl::pixel Pixel>
+  template<std::uint8_t Depth>
   class splicer {
   public:
     static inline constexpr auto depth{Depth};
 
-    using pixel_type = Pixel;
-    using fragment_t = fgm::fragment<depth, pixel_type>;
+    using fragment_t = fgm::fragment<depth, cpl::nat_cc>;
 
     using snippet_type = snippet<depth>;
 
@@ -366,16 +365,16 @@ namespace details {
   }
 } // namespace details
 
-template<std::uint8_t Depth, cpl::pixel Pixel, typename Iter>
-[[nodiscard]] std::vector<fgm::fragment<Depth, Pixel>> splice(Iter first,
-                                                              Iter last) {
+template<std::uint8_t Depth, typename Iter>
+[[nodiscard]] std::vector<fgm::fragment<Depth, cpl::nat_cc>> splice(Iter first,
+                                                                    Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
 
   details::match_all(snippets, deltas);
   details::crossmatch_all(deltas, snippets.size());
 
-  details::splicer<Depth, Pixel> spliced{snippets};
+  details::splicer<Depth> spliced{snippets};
   build_graph(deltas, snippets.size()).process(spliced);
 
   return std::move(spliced.result());

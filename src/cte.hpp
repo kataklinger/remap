@@ -31,7 +31,8 @@ class extractor {
 public:
   using pixel_type = Ty;
   using allocator_type = Alloc;
-  using contour_type = ctr::contour<pixel_type, allocator_type>;
+  using contour_type =
+      ctr::contour<pixel_type, all::rebind_alloc_t<allocator_type, ctr::edge>>;
 
   using contours =
       std::vector<contour_type,

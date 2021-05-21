@@ -20,10 +20,10 @@ add_executable (remap
 	"src/frc.hpp"
 	"src/fgs.hpp"
 	"src/ifd.hpp"
+	"src/fde.hpp"
 	"src/aws.hpp"
-	"src/arf.hpp"
 	"src/pngu.hpp"
-	"src/main.cpp")
+	"src/main.cpp" "src/fdf.hpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)

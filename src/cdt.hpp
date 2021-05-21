@@ -277,6 +277,13 @@ template<std::integral Ty>
   return {hor.lower_, ver.lower_, hor.upper_, ver.upper_};
 }
 
+template<std::integral Ty, std::unsigned_integral Tx>
+[[nodiscard]] inline std::tuple<std::ptrdiff_t, std::ptrdiff_t>
+    to_range(region<Ty> offset, dimensions<Tx> const& dim) noexcept {
+  return {to_index(offset.left_top(), dim),
+          to_index(offset.right_bottom(), dim)};
+}
+
 template<std::size_t Idx, std::integral Ty>
 Ty const& get(region<Ty> const& reg) {
   static_assert(Idx < 4);
