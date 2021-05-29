@@ -23,7 +23,7 @@ public:
 
   using image_type = mrl::matrix<cpl::nat_cc, allocator_t<cpl::nat_cc>>;
 
-  using fragment_t = fgm::fragment<color_depth, cpl::nat_cc>;
+  using fragment_t = fgm::fragment<color_depth>;
   using fragment_list = std::list<fragment_t>;
 
 private:

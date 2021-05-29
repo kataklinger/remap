@@ -14,20 +14,15 @@ using dot_t = std::array<std::uint16_t, Depth>;
 
 using point_t = cdt::point<std::int32_t>;
 
-template<cpl::pixel Pixel>
 struct fragment_blend {
-  using pixel_type = Pixel;
-
-  mrl::matrix<pixel_type> image_;
+  mrl::matrix<cpl::nat_cc> image_;
   mrl::matrix<std::uint8_t> mask_;
 };
 
-template<std::uint8_t Depth, cpl::pixel Pixel>
+template<std::uint8_t Depth>
 class fragment {
 public:
   static inline constexpr auto depth{Depth};
-
-  using pixel_type = Pixel;
 
   using dot_type = dot_t<depth>;
   using matrix_type = mrl::matrix<dot_type>;
@@ -44,7 +39,7 @@ public:
   }
 
   template<typename Alloc>
-  void blit(point_t pos, mrl::matrix<pixel_type, Alloc> const& image) {
+  void blit(point_t pos, mrl::matrix<cpl::nat_cc, Alloc> const& image) {
     ensure(pos, image.dimensions());
 
     auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
@@ -77,8 +72,8 @@ public:
     }
   }
 
-  [[nodiscard]] fragment_blend<pixel_type> blend() const {
-    mrl::matrix<pixel_type> image{dots_.dimensions()};
+  [[nodiscard]] fragment_blend blend() const {
+    mrl::matrix<cpl::nat_cc> image{dots_.dimensions()};
     mrl::matrix<std::uint8_t> mask{dots_.dimensions()};
 
     auto img_out{image.data()};
@@ -89,8 +84,7 @@ public:
       auto dot{&(*first)[0]};
       auto selected{std::max_element(dot, dot + depth)};
       if (*selected != 0) {
-        *img_out = {
-            static_cast<typename pixel_type::value_type>(selected - dot)};
+        *img_out = {static_cast<cpl::nat_cc::value_type>(selected - dot)};
         *mask_out = *selected != 0 ? 1 : 0;
       }
     }

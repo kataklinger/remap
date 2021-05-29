@@ -16,7 +16,7 @@ namespace details {
 
   template<std::uint8_t Depth>
   struct snippet {
-    fgm::fragment<Depth, cpl::nat_cc> const* fragment_{};
+    fgm::fragment<Depth> const* fragment_{};
     mrl::matrix<std::uint8_t> mask_;
 
     grid_t grid_;
@@ -24,7 +24,7 @@ namespace details {
 
   template<std::uint8_t Depth>
   [[nodiscard]] snippet<Depth>
-      extract_single(fgm::fragment<Depth, cpl::nat_cc> const& fragment) {
+      extract_single(fgm::fragment<Depth> const& fragment) {
     auto [image, mask]{fragment.blend()};
 
     mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
@@ -321,7 +321,7 @@ namespace details {
   public:
     static inline constexpr auto depth{Depth};
 
-    using fragment_t = fgm::fragment<depth, cpl::nat_cc>;
+    using fragment_t = fgm::fragment<depth>;
 
     using snippet_type = snippet<depth>;
 
@@ -366,8 +366,7 @@ namespace details {
 } // namespace details
 
 template<std::uint8_t Depth, typename Iter>
-[[nodiscard]] std::vector<fgm::fragment<Depth, cpl::nat_cc>> splice(Iter first,
-                                                                    Iter last) {
+[[nodiscard]] std::vector<fgm::fragment<Depth>> splice(Iter first, Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
 

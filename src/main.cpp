@@ -98,7 +98,7 @@ void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
 
 auto read_fragments(std::filesystem::path dir) {
   using namespace std::filesystem;
-  using fragment_t = fgm::fragment<16, cpl::nat_cc>;
+  using fragment_t = fgm::fragment<16>;
 
   std::vector<std::filesystem::path> files;
   std::copy(
@@ -310,7 +310,7 @@ int main() {
     }
   }
 
-  fgm::fragment<16, cpl::nat_cc> frag{image1.dimensions()};
+  fgm::fragment<16> frag{image1.dimensions()};
 
   frag.blit({0, 0}, image1);
   frag.blit(*offset, image2);
