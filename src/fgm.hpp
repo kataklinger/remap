@@ -19,6 +19,14 @@ struct fragment_blend {
   mrl::matrix<std::uint8_t> mask_;
 };
 
+struct frame {
+  std::size_t number_;
+  point_t position_;
+};
+
+struct no_content_tag {};
+inline constexpr no_content_tag no_content{};
+
 template<std::uint8_t Depth>
 class fragment {
 public:
@@ -28,7 +36,12 @@ public:
   using matrix_type = mrl::matrix<dot_type>;
 
 public:
-  inline fragment(mrl::dimensions_t step) noexcept
+  inline fragment() noexcept
+      : step_{1, 1}
+      , dots_{step_} {
+  }
+
+  inline explicit fragment(mrl::dimensions_t step) noexcept
       : step_{step}
       , dots_{step} {
   }
@@ -38,37 +51,46 @@ public:
       , dots_{std::move(dots)} {
   }
 
+  inline fragment(fragment const& other, no_content_tag /*unused*/) noexcept
+      : step_{other.step_}
+      , dots_{other.dots_.dimensions()}
+      , zero_{other.zero_} {
+  }
+
+  template<typename Alloc1, typename Alloc2>
+  void blit(point_t pos,
+            mrl::matrix<cpl::nat_cc, Alloc1> const& image,
+            mrl::matrix<cpl::mon_bv, Alloc2> const& mask) {
+    blit_impl(pos, image, [m = mask.data()](auto dst, auto src) mutable {
+      if (value(*(m++)) == 0) {
+        ++(*dst)[value(*src)];
+      }
+    });
+  }
+
   template<typename Alloc>
-  void blit(point_t pos, mrl::matrix<cpl::nat_cc, Alloc> const& image) {
+  void blit(point_t pos,
+            mrl::matrix<cpl::nat_cc, Alloc> const& image,
+            std::size_t frame_no) {
     ensure(pos, image.dimensions());
 
-    auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
-    auto stride{dots_.width() - image.width()};
+    blit_impl(pos, image, [](auto dst, auto src) { ++(*dst)[value(*src)]; });
 
-    auto out{dots_.data() + adj_x + adj_y * dots_.width()};
-    for (auto first{image.data()}, last{image.end()}; first < last;
-         out += stride) {
-      for (auto end{first + image.width()}; first < end; ++first, ++out) {
-        ++(*out)[value(*first)];
-      }
-    }
+    frames_.emplace_back(frame_no, pos);
   }
 
   void blit(point_t pos, fragment const& other) {
     ensure(pos, other.dots_.dimensions());
 
-    auto& dots{other.dots_};
-    auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
-    auto stride{dots_.width() - dots.width()};
-
-    auto out{dots_.data() + adj_x + adj_y * dots_.width()};
-    for (auto first{dots.data()}, last{dots.end()}; first < last;
-         out += stride) {
-      for (auto end{first + dots.width()}; first < end; ++first, ++out) {
-        for (std::uint8_t i{0}; i < depth; ++i) {
-          (*out)[i] += (*first)[i];
-        }
+    blit_impl(pos, other.dots_, [](auto dst, auto src) {
+      for (std::uint8_t i{0}; i < depth; ++i) {
+        (*dst)[i] += (*src)[i];
       }
+    });
+
+    frames_.reserve(frames_.size() + other.frames_.size());
+    for (auto& f : other.frames_) {
+      frames_.emplace_back(f.number_, f.position_ + pos);
     }
   }
 
@@ -100,7 +122,29 @@ public:
     return dots_.dimensions();
   }
 
+  [[nodiscard]] inline mrl::dimensions_t step() const noexcept {
+    return step_;
+  }
+
+  [[nodiscard]] inline std::vector<frame> const& frames() const noexcept {
+    return frames_;
+  }
+
 private:
+  template<typename Ty, typename Alloc, typename Fn>
+  void blit_impl(point_t pos, mrl::matrix<Ty, Alloc> const& source, Fn fn) {
+    auto adj_x{pos.x_ - zero_.x_}, adj_y{pos.y_ - zero_.y_};
+    auto stride{dots_.width() - source.width()};
+
+    auto dst{dots_.data() + adj_x + adj_y * dots_.width()};
+    for (auto first{source.data()}, last{source.end()}; first < last;
+         dst += stride) {
+      for (auto end{first + source.width()}; first < end; ++first, ++dst) {
+        fn(dst, first);
+      }
+    }
+  }
+
   void ensure(point_t pos, mrl::dimensions_t const& dim) {
     mrl::region_t region{};
 
@@ -147,5 +191,7 @@ private:
   matrix_type dots_;
 
   point_t zero_;
+
+  std::vector<frame> frames_;
 };
 } // namespace fgm

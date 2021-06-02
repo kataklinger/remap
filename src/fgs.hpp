@@ -331,7 +331,7 @@ namespace details {
     }
 
     inline void operator()() {
-      result_.emplace_back(mrl::dimensions_t{1, 1});
+      result_.emplace_back();
     }
 
     inline void operator()(std::uint16_t snippet, cdt::offset_t offset) {

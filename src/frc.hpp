@@ -80,22 +80,22 @@ public:
 
 private:
   template<typename Feed>
-  auto process_init(Feed&& feed, allocator_t<char> const& alloc) {
-    auto image{feed.produce(alloc)};
+  auto process_init(Feed& feed, allocator_t<char> const& alloc) {
+    auto [no, image]{feed.produce(alloc)};
 
     add_fragment(image.dimensions());
 
-    blit(image);
+    blit(image, no);
 
     image_type median{image.dimensions(), alloc};
     return extractor_.extract(image, median);
   }
 
   template<typename Feed>
-  auto process_frame(Feed&& feed,
+  auto process_frame(Feed& feed,
                      grid_type const& previous,
                      allocator_t<char> const& alloc) {
-    auto image{feed.produce(alloc)};
+    auto [no, image]{feed.produce(alloc)};
 
     image_type median{image.dimensions(), alloc};
     auto keys{extractor_.extract(image, median)};
@@ -108,7 +108,7 @@ private:
       add_fragment(image.dimensions());
     }
 
-    blit(image);
+    blit(image, no);
 
     return keys;
   }
@@ -118,8 +118,8 @@ private:
     position_.x_ = position_.y_ = 0;
   }
 
-  inline void blit(image_type const& image) noexcept {
-    current_->blit(position_, image);
+  inline void blit(image_type const& image, std::size_t frame_no) noexcept {
+    current_->blit(position_, image, frame_no);
   }
 
 private:

@@ -78,10 +78,10 @@ template<typename Feeder>
     auto const min_height{2 * dimensions.height_ / 5};
     auto const min_width{2 * dimensions.width_ / 3};
 
-    auto pimage{feed.produce()};
+    auto [pno, pimage]{feed.produce()};
     for (std::size_t area{}, stagnation{};
          feed.has_more() && stagnation <= 100;) {
-      auto cimage{feed.produce()};
+      auto [cno, cimage]{feed.produce()};
 
       details::compare(pimage, cimage, heatmap);
       if (auto contour{details::get_best(extractor.extract(heatmap, mask))};

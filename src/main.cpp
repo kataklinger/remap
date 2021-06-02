@@ -2,6 +2,7 @@
 #include "aws.hpp"
 #include "cte.hpp"
 #include "fde.hpp"
+#include "fdf.hpp"
 #include "fgm.hpp"
 #include "fgs.hpp"
 #include "frc.hpp"
@@ -131,6 +132,8 @@ template<typename Image>
 class file_feed {
 public:
   using image_type = Image;
+  using frame_type = ifd::frame<image_type>;
+
   using allocator_type = typename image_type::allocator_type;
 
 private:
@@ -157,11 +160,11 @@ public:
     return next_ != files_.end();
   }
 
-  [[nodiscard]] inline image_type produce() {
+  [[nodiscard]] inline frame_type produce() {
     return produce(allocator_type{});
   }
 
-  [[nodiscard]] image_type produce(allocator_type alloc) {
+  [[nodiscard]] frame_type produce(allocator_type alloc) {
     auto current{next_++};
 
     auto count = current - files_.begin();
@@ -180,20 +183,22 @@ public:
 
     mrl::matrix<cpl::nat_cc, allocator_type> temp{screen_dimensions, alloc};
 
+    auto no{static_cast<std::size_t>(next_ - files_.begin())};
+
     std::ifstream input;
     input.open(*current, std::ios::in | std::ios::binary);
     if (!input.is_open()) {
-      return temp;
+      return {no, temp};
     }
 
     input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
     input.close();
 
     if (crop_) {
-      return temp.crop({31, 55, 55, 105});
+      return {no, temp.crop({31, 55, 55, 105})};
     }
 
-    return temp;
+    return {no, temp};
   }
 
 private:
@@ -312,8 +317,8 @@ int main() {
 
   fgm::fragment<16> frag{image1.dimensions()};
 
-  frag.blit({0, 0}, image1);
-  frag.blit(*offset, image2);
+  frag.blit({0, 0}, image1, 0);
+  frag.blit(*offset, image2, 1);
 
   auto merged{frag.blend().image_};
 
@@ -339,21 +344,21 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  // auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-  //                      {screen_width, screen_height})};
+  auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+                        {screen_width, screen_height})};
 
-  // if (!window) {
-  //  return 0;
-  //}
+  if (!window) {
+    return 0;
+  }
 
-  // frc::collector collector{image1.dimensions()};
-  // collector.collect(
-  //    file_feed<frc::collector::image_type>{ddir / "seq", *window});
+  frc::collector collector{image1.dimensions()};
+  collector.collect(
+      file_feed<frc::collector::image_type>{ddir / "seq", *window});
 
-  // auto& fragments{collector.fragments()};
-  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+  auto& fragments{collector.fragments()};
+  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
 
-  auto fragments{read_fragments(ddir / "fgm")};
+  auto fragments1{read_fragments(ddir / "fgm")};
 
   auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
                                                         fragments.end())};
@@ -362,15 +367,18 @@ int main() {
   auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("map.png", rgb_mp);
 
-  fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
+  // fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
 
-  auto foreground{filter.extract(image1, {1813, 1217})};
-  auto mask{fde::mask(foreground, image1.dimensions())};
+  // auto foreground{filter.extract(image1, {1813, 1217})};
+  // auto mask{fde::mask(foreground, image1.dimensions())};
 
-  auto rgb_msk = mask.map(
-      [](auto c) noexcept { return cpl::native_to_blend({value(c)}); });
+  auto filtered{
+      fdf::filter(spliced, file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"})};
 
-  write_rgb("mask.png", rgb_msk);
+  // auto rgb_msk = mask.map(
+  //    [](auto c) noexcept { return cpl::native_to_blend({value(c)}); });
+
+  // write_rgb("mask.png", rgb_msk);
 
   return 0;
 }

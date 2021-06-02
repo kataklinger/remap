@@ -5,7 +5,7 @@
 
 #include "cpl.hpp"
 #include "cte.hpp"
-#include "mrl.hpp"
+#include "fgm.hpp"
 
 #include <intrin.h>
 
@@ -77,7 +77,7 @@ public:
   }
 
   [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& frame,
-                                 mrl::point_t position) {
+                                 fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
 
     auto area_limit{frame.dimensions().area() / 5};
@@ -109,8 +109,6 @@ private:
 private:
   contour_extractor_t contours_;
   mrl::matrix<cpl::nat_cc> const* background_;
-
-public:
   mrl::matrix<std::uint8_t> mask_;
 };
 
