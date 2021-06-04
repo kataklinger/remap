@@ -50,7 +50,7 @@ namespace details {
     fgm::fragment_blend background_;
     std::optional<fde::extractor<std::allocator<char>>> extractor_;
 
-    fragment_t const* original_;
+    fragment_t const* original_{};
     std::vector<fragment_t> output_;
   };
 
@@ -79,7 +79,7 @@ template<std::uint8_t Depth, typename Feeder>
 
   while (feed.has_more()) {
     auto [no, image]{feed.produce()};
-    if (auto& blend{blends[no]}; no == blend.frame_.number_) {
+    if (auto& blend{blends[no - 1]}; no == blend.frame_.number_) {
       current.update(blend, image);
     }
   }

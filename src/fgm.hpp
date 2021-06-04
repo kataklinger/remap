@@ -46,9 +46,14 @@ public:
       , dots_{step} {
   }
 
-  inline fragment(matrix_type dots, mrl::dimensions_t step) noexcept
+  inline fragment(matrix_type dots,
+                  mrl::dimensions_t step,
+                  point_t zero,
+                  std::vector<fgm::frame>&& frames) noexcept
       : step_{step}
-      , dots_{std::move(dots)} {
+      , dots_{std::move(dots)}
+      , zero_{zero}
+      , frames_{std::move(frames)} {
   }
 
   inline fragment(fragment const& other, no_content_tag /*unused*/) noexcept
@@ -124,6 +129,10 @@ public:
 
   [[nodiscard]] inline mrl::dimensions_t step() const noexcept {
     return step_;
+  }
+
+  [[nodiscard]] inline point_t zero() const noexcept {
+    return zero_;
   }
 
   [[nodiscard]] inline std::vector<frame> const& frames() const noexcept {

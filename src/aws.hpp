@@ -63,8 +63,34 @@ namespace details {
   }
 } // namespace details
 
+class window_info {
+public:
+  window_info(mrl::region_t const& bounds, mrl::dimensions_t const& dim)
+      : bounds_{bounds.left_ + 1,
+                bounds.top_ + 1,
+                bounds.right_ - 1,
+                bounds.bottom_ - 1}
+      , margins_{bounds_.left_,
+                 bounds_.top_,
+                 dim.width_ - bounds_.right_,
+                 dim.height_ - bounds_.bottom_} {
+  }
+
+  [[nodicard]] inline mrl::region_t const& bounds() const noexcept {
+    return bounds_;
+  }
+
+  [[nodicard]] inline mrl::region_t const& margins() const noexcept {
+    return margins_;
+  }
+
+private:
+  mrl::region_t bounds_;
+  mrl::region_t margins_;
+};
+
 template<typename Feeder>
-[[nodiscard]] std::optional<mrl::region_t>
+[[nodiscard]] std::optional<window_info>
     scan(Feeder&& feed, mrl::dimensions_t const& dimensions) requires(
         ifd::feeder<std::decay_t<Feeder>>) {
   cte::extractor<cpl::mon_bv> extractor{dimensions};
@@ -106,11 +132,10 @@ template<typename Feeder>
     }
   }
 
-  return mrl::region_t{
-      result->left_ + 1,
-      result->top_ + 1,
-      result->right_ - 1,
-      result->bottom_ - 1,
-  };
+  if (result.has_value()) {
+    return std::optional<window_info>{std::in_place, *result, dimensions};
+  }
+
+  return {};
 }
 } // namespace aws

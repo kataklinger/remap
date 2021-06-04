@@ -259,6 +259,10 @@ struct region {
     return width() * height();
   }
 
+  [[nodiscard]] inline dimensions<value_type> dimensions() const noexcept {
+    return {width(), height()};
+  }
+
   [[nodiscard]] inline bool
       contains(point<value_type> const& point) const noexcept {
     return point.x_ >= left_ && point.x_ <= right_ && point.y_ >= top_ &&

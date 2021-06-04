@@ -87,11 +87,20 @@ void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
     output.open(dir / std::to_string(i), std::ios::out | std::ios::binary);
 
     auto dim{first->dots().dimensions()};
-    output.write(reinterpret_cast<char const*>(&dim),
-                 sizeof(mrl::dimensions_t));
+    output.write(reinterpret_cast<char const*>(&dim), sizeof(dim));
 
     output.write(reinterpret_cast<char const*>(first->dots().data()),
                  first->dots().dimensions().area() * sizeof(fgm::dot_t<16>));
+
+    auto zero{first->zero()};
+    output.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
+
+    auto frames{first->frames().size()};
+    output.write(reinterpret_cast<char const*>(&frames), sizeof(frames));
+
+    for (auto& frame : first->frames()) {
+      output.write(reinterpret_cast<char const*>(&frame), sizeof(frame));
+    }
 
     output.close();
   }
@@ -120,9 +129,24 @@ auto read_fragments(std::filesystem::path dir) {
     input.read(reinterpret_cast<char*>(temp.data()),
                dim.area() * sizeof(fgm::dot_t<16>));
 
+    fgm::point_t zero{};
+    input.read(reinterpret_cast<char*>(&zero), sizeof(zero));
+
+    std::size_t count{};
+    input.read(reinterpret_cast<char*>(&count), sizeof(count));
+
+    std::vector<fgm::frame> frames{};
+    for (std::size_t i{0}; i < count; ++i) {
+      fgm::frame frame{};
+      input.read(reinterpret_cast<char*>(&frame), sizeof(frame));
+
+      frames.push_back(frame);
+    }
+
     input.close();
 
-    result.emplace_back(std::move(temp), mrl::dimensions_t{1, 1});
+    result.emplace_back(
+        std::move(temp), mrl::dimensions_t{1, 1}, zero, std::move(frames));
   }
 
   return result;
@@ -195,7 +219,7 @@ public:
     input.close();
 
     if (crop_) {
-      return {no, temp.crop({31, 55, 55, 105})};
+      return {no, temp.crop(*crop_)};
     }
 
     return {no, temp};
@@ -344,41 +368,48 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  auto window{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-                        {screen_width, screen_height})};
+  // auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+  //                      {screen_width, screen_height})};
 
-  if (!window) {
-    return 0;
-  }
+  // if (!active) {
+  //  return 0;
+  //}
 
-  frc::collector collector{image1.dimensions()};
+  std::optional<aws::window_info> active{
+      std::in_place,
+      mrl::region_t{31, 55, 334, 207},
+      mrl::dimensions_t{screen_width, screen_height}};
+
+  frc::collector collector{active->bounds().dimensions()};
   collector.collect(
-      file_feed<frc::collector::image_type>{ddir / "seq", *window});
+      file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
 
   auto& fragments{collector.fragments()};
   write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
 
   auto fragments1{read_fragments(ddir / "fgm")};
 
-  auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
-                                                        fragments.end())};
+  auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
+                                                        fragments1.end())};
 
-  auto map{spliced.front().blend().image_};
-  auto rgb_mp = map.map([](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("map.png", rgb_mp);
+  auto smap{spliced.front().blend().image_};
+  auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("smap.png", rgb_smp);
 
   // fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
 
   // auto foreground{filter.extract(image1, {1813, 1217})};
   // auto mask{fde::mask(foreground, image1.dimensions())};
 
-  auto filtered{
-      fdf::filter(spliced, file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"})};
+  auto filtered{fdf::filter(
+      spliced,
+      file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
-  // auto rgb_msk = mask.map(
-  //    [](auto c) noexcept { return cpl::native_to_blend({value(c)}); });
+  auto fmap{filtered.front().blend().image_};
 
-  // write_rgb("mask.png", rgb_msk);
+  auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c); });
+
+  write_rgb("fmap.png", rgb_fmp);
 
   return 0;
 }
