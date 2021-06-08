@@ -368,17 +368,17 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  // auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-  //                      {screen_width, screen_height})};
+  auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+                        {screen_width, screen_height})};
 
-  // if (!active) {
-  //  return 0;
-  //}
+  if (!active) {
+    return 0;
+  }
 
-  std::optional<aws::window_info> active{
-      std::in_place,
-      mrl::region_t{31, 55, 334, 207},
-      mrl::dimensions_t{screen_width, screen_height}};
+  // std::optional<aws::window_info> active{
+  //    std::in_place,
+  //    mrl::region_t{31, 55, 334, 207},
+  //    mrl::dimensions_t{screen_width, screen_height}};
 
   frc::collector collector{active->bounds().dimensions()};
   collector.collect(
@@ -396,16 +396,17 @@ int main() {
   auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
   write_rgb("smap.png", rgb_smp);
 
-  // fde::extractor<std::allocator<char>> filter{map, image1.dimensions()};
-
-  // auto foreground{filter.extract(image1, {1813, 1217})};
-  // auto mask{fde::mask(foreground, image1.dimensions())};
-
   auto filtered{fdf::filter(
       spliced,
       file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
-  auto fmap{filtered.front().blend().image_};
+  auto fmap = std::max_element(filtered.begin(),
+                               filtered.end(),
+                               [](auto& lhs, auto& rhs) {
+                                 return lhs.dots().size() < rhs.dots().size();
+                               })
+                  ->blend()
+                  .image_;
 
   auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c); });
 
