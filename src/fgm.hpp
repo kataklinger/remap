@@ -93,11 +93,9 @@ public:
       }
     });
 
-    auto adj{zero_ - other.zero_};
-
     frames_.reserve(frames_.size() + other.frames_.size());
     for (auto& f : other.frames_) {
-      frames_.emplace_back(f.number_, f.position_ + adj);
+      frames_.emplace_back(f.number_, f.position_ - other.zero_ + pos);
     }
   }
 

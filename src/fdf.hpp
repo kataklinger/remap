@@ -25,33 +25,63 @@ namespace details {
     using blend_t = blend_item<Depth>;
     using fragment_t = typename blend_t::fragment_t;
 
-  public:
-    void update(blend_t& item, mrl::matrix<cpl::nat_cc>& image) {
-      if (!extractor_.has_value() || original_ != item.original_) {
-        original_ = item.original_;
-
-        background_ = original_->blend();
-        extractor_.emplace(background_.image_, image.dimensions());
-
-        output_.emplace_back(*original_, fgm::no_content);
+  private:
+    class output {
+    public:
+      output(fragment_t const* original, mrl::dimensions_t const& dim)
+          : zero_{original->zero()}
+          , background_{original->blend()}
+          , extractor_{background_.image_, dim}
+          , result_{*original, fgm::no_content} {
       }
 
-      auto foreground{extractor_->extract(image, item.frame_.position_)};
-      auto mask{fde::mask(foreground, image.dimensions())};
+      void update(mrl::matrix<cpl::nat_cc> const& image,
+                  fgm::point_t const& pos) {
+        auto foreground{extractor_.extract(image, pos - zero_)};
+        auto mask{fde::mask(foreground, image.dimensions())};
 
-      output_.back().blit(item.frame_.position_, image, mask);
+        result_.blit(pos, image, mask);
+      }
+
+      [[nodiscard]] inline fragment_t result() noexcept {
+        return std::move(result_);
+      }
+
+    private:
+      fgm::point_t zero_;
+      fgm::fragment_blend background_;
+
+      fde::extractor<std::allocator<char>> extractor_;
+
+      fragment_t result_;
+    };
+
+  public:
+    inline void update(blend_t const& item,
+                       mrl::matrix<cpl::nat_cc> const& image) {
+      get_output(item.original_, image.dimensions())
+          .update(image, item.frame_.position_);
     }
 
     [[nodiscard]] std::vector<fragment_t> result() && noexcept {
-      return std::move(output_);
+      std::vector<fragment_t> ret{};
+      for (auto& [k, r] : outputs_) {
+        ret.emplace_back(r.result());
+      }
+
+      return ret;
     }
 
   private:
-    fgm::fragment_blend background_;
-    std::optional<fde::extractor<std::allocator<char>>> extractor_;
+    [[nodiscard]] inline output&
+        get_output(fragment_t const* original,
+                   mrl::dimensions_t const& dim) noexcept {
+      auto [it, success] = outputs_.try_emplace(original, original, dim);
+      return it->second;
+    }
 
-    fragment_t const* original_{};
-    std::vector<fragment_t> output_;
+  private:
+    std::unordered_map<fragment_t const*, output> outputs_;
   };
 
 } // namespace details
