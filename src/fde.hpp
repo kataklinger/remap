@@ -7,6 +7,8 @@
 #include "cte.hpp"
 #include "fgm.hpp"
 
+#include "kpe.hpp"
+
 #include <intrin.h>
 
 namespace fde {
@@ -80,10 +82,20 @@ public:
                                  fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
 
-    auto area_limit{frame.dimensions().area() / 5};
+    // TODO: create proper median filter instead of relying on keypoint
+    // extraction
+    kpe::extractor<kpr::grid<1, 1, std::allocator<char>>, 0> kpex{
+        frame.dimensions()};
+
+    mrl::matrix<cpl::nat_cc> median{frame.dimensions(), frame.get_allocator()};
+
+    [[maybe_unused]] auto xx{kpex.extract(frame, median)};
+    // end
 
     auto forground{contours_.extract(
-        frame, [m = mask_.data()](auto px, auto idx) { return m[idx] == 0; })};
+        median, [m = mask_.data()](auto px, auto idx) { return m[idx] == 0; })};
+
+    auto area_limit{frame.dimensions().area() / 5};
 
     forground.erase(
         std::remove_if(forground.begin(),
@@ -122,6 +134,17 @@ template<typename Contour, typename Alloc>
   auto output{result.data()};
   for (auto& contour : forground) {
     contour.recover(output, {1});
+  }
+
+  for (auto& contour : forground) {
+    auto& reg = contour.enclosure();
+    output = result.data() + reg.top_ * dim.width_;
+
+    for (auto y{reg.top_}; y < reg.bottom_; ++y, output += dim.width_) {
+      for (auto x{reg.left_}; x < reg.right_; ++x) {
+        output[x] = {1};
+      }
+    }
   }
 
   return result;
