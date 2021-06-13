@@ -5,6 +5,7 @@
 
 #include "fgm.hpp"
 
+#include <unordered_map>
 #include <utility>
 
 namespace arf {
@@ -43,8 +44,7 @@ namespace details {
   }
 
   template<std::uint8_t Size>
-  requires odd_size<Size>
-  class buffer {
+  requires odd_size<Size> class buffer {
   public:
     static constexpr std::uint8_t pixels_count{Size};
     static constexpr std::uint8_t unit_pixels{sizeof(unit_t) * 2};
@@ -59,6 +59,26 @@ namespace details {
     inline void push(cpl::nat_cc pixel) noexcept {
       shift(store_);
       store_[0] |= static_cast<unit_t>(value(pixel)) << head_bit;
+    }
+
+    [[nodiscard]] inline store_t const& data() const noexcept {
+      return store_;
+    }
+
+    friend auto operator<=>(buffer const&, buffer const&) = default;
+
+  private:
+    store_t store_;
+  };
+
+  template<std::uint8_t Size>
+  requires odd_size<Size> class counted_buffer {
+  public:
+    using buffer_t = buffer<Size>;
+
+  public:
+    inline void push(cpl::nat_cc pixel) noexcept {
+      buffer_.push(pixel);
       ++count_;
     }
 
@@ -66,17 +86,17 @@ namespace details {
       count_ = 0;
     }
 
-    [[nodiscard]] inline store_t const& data() const noexcept {
-      return store_;
-    }
-
     [[nodiscard]] inline bool ready() const noexcept {
       return count_ >= pixels_count;
     }
 
+    [[nodiscard]] buffer_t const& get() const noexcept {
+      return buffer_;
+    }
+
   private:
-    store_t store_;
-    std::uint32_t count_;
+    buffer_t buffer_;
+    std::uint32_t count_{};
   };
 
   [[nodiscard]] inline std::size_t hash_impl(std::size_t value) noexcept {
@@ -101,23 +121,51 @@ namespace details {
   }
 
   template<std::uint8_t Size>
-  requires odd_size<Size>
-  struct buffer_hash {
+  requires odd_size<Size> struct buffer_hash {
     [[nodiscar]] inline std::size_t
         operator()(buffer<Size> const& buffer) const noexcept {
       return hash_impl(buffer.data(), std::make_index_sequence<Size>{});
     }
   };
 
+  template<std::uint8_t Size>
+  using pattern_counter =
+      std::unordered_map<buffer<Size>, std::size_t, buffer_hash<Size>>;
+
+  template<std::uint8_t Size>
+  requires details::odd_size<Size> [[nodiscard]] mrl::matrix<std::size_t>
+      generate_heatmap(fragment_blend const& fragment) {
+    details::pattern_counter<Size> counters{};
+    details::counted_buffer<Size> buffer{};
+
+    mrl::matrix<std::size_t> result{fragment.image_.dimensions()};
+    auto output{result.data()};
+
+    auto width{fragment.image_.width()};
+
+    for (auto first{fragment.image_.data()},
+         current{first},
+         end{fragment.image_.end()};
+         current < end;) {
+      buffer.reset();
+
+      for (auto last{current + width}; current < last; ++current) {
+        for (; !fragment.mask_[current - first] && current < last; ++current) {
+          buffer.reset();
+        }
+
+        buffer.push(*current);
+        if (buffer.ready()) {
+          auto count{++counters[buffer.get()]};
+          output[current - first - Size / 2] = count;
+        }
+      }
+    }
+
+    return result;
+  }
+
+
 } // namespace details
 
-template<std::uint8_t Size>
-requires details::odd_size<Size>
-void remove(mrl::matrix<cpl::nat_cc> const& image) {
-  details::buffer<Size> buffer{};
-  for (auto first{image.data()}, end{image.end()}; first < end;) {
-    for (auto last{first + image.width()}; first < last; ++first) {
-    }
-  }
-}
 } // namespace arf
