@@ -23,6 +23,7 @@ add_executable (remap
 	"src/fde.hpp"
 	"src/aws.hpp"
 	"src/fdf.hpp"
+	"src/arf.hpp"
 	"src/pngu.hpp"
 	"src/main.cpp")
 

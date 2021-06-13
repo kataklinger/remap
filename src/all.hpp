@@ -1,5 +1,5 @@
 
-// allocation library
+// allocator library
 
 #pragma once
 

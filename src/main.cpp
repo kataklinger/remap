@@ -1,4 +1,5 @@
 ﻿
+#include "arf.hpp"
 #include "aws.hpp"
 #include "cte.hpp"
 #include "fde.hpp"
@@ -33,8 +34,8 @@ inline std::uint64_t now() {
 }
 
 template<typename Fn>
-requires std::invocable<Fn> void
-    perf_test(Fn&& fn, std::size_t count, std::string const& name, bool run) {
+requires std::invocable<Fn>
+void perf_test(Fn&& fn, std::size_t count, std::string const& name, bool run) {
   if (!run) {
     return;
   }
@@ -368,49 +369,57 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-                        {screen_width, screen_height})};
+  // auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+  //                      {screen_width, screen_height})};
 
-  if (!active) {
-    return 0;
+  // if (!active) {
+  //  return 0;
+  //}
+
+  //// std::optional<aws::window_info> active{
+  ////    std::in_place,
+  ////    mrl::region_t{31, 55, 334, 207},
+  ////    mrl::dimensions_t{screen_width, screen_height}};
+
+  // frc::collector collector{active->bounds().dimensions()};
+  // collector.collect(
+  //    file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
+
+  // auto& fragments{collector.fragments()};
+  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+
+  // auto fragments1{read_fragments(ddir / "fgm")};
+
+  // auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
+  //                                                      fragments1.end())};
+
+  // auto smap{spliced.front().blend().image_};
+  // auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c);
+  // }); write_rgb("smap.png", rgb_smp);
+
+  // auto filtered{fdf::filter(
+  //    spliced,
+  //    file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
+
+  // auto fmap = std::max_element(filtered.begin(),
+  //                             filtered.end(),
+  //                             [](auto& lhs, auto& rhs) {
+  //                               return lhs.dots().size() < rhs.dots().size();
+  //                             })
+  //                ->blend()
+  //                .image_;
+
+  // auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c);
+  // });
+
+  // write_rgb("fmap.png", rgb_fmp);
+
+  arf::details::buffer<31> kk{};
+  for (std::uint8_t i{1}; i <= 31; ++i) {
+    kk.push({std::uint8_t(i & 0xf)});
   }
 
-  // std::optional<aws::window_info> active{
-  //    std::in_place,
-  //    mrl::region_t{31, 55, 334, 207},
-  //    mrl::dimensions_t{screen_width, screen_height}};
-
-  frc::collector collector{active->bounds().dimensions()};
-  collector.collect(
-      file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
-
-  auto& fragments{collector.fragments()};
-  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
-
-  auto fragments1{read_fragments(ddir / "fgm")};
-
-  auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
-                                                        fragments1.end())};
-
-  auto smap{spliced.front().blend().image_};
-  auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("smap.png", rgb_smp);
-
-  auto filtered{fdf::filter(
-      spliced,
-      file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
-
-  auto fmap = std::max_element(filtered.begin(),
-                               filtered.end(),
-                               [](auto& lhs, auto& rhs) {
-                                 return lhs.dots().size() < rhs.dots().size();
-                               })
-                  ->blend()
-                  .image_;
-
-  auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c); });
-
-  write_rgb("fmap.png", rgb_fmp);
+  arf::details::buffer_hash<31>{}(kk);
 
   return 0;
 }

@@ -155,7 +155,8 @@ Ty&& get(dimensions<Ty>&& dim) {
 using offset_t = point<std::int32_t>;
 
 struct offset_hash {
-  [[nodiscard]] std::size_t operator()(offset_t const& off) const noexcept {
+  [[nodiscard]] inline std::size_t
+      operator()(offset_t const& off) const noexcept {
     std::size_t hashed = 2166136261U;
 
     hashed ^= static_cast<std::size_t>(off.x_);
