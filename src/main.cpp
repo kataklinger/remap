@@ -369,39 +369,42 @@ int main() {
 
   write_rgb("merged.png", rgb_g);
 
-  // auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-  //                      {screen_width, screen_height})};
+  if (false) {
 
-  // if (!active) {
-  //  return 0;
-  //}
+    auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+                          {screen_width, screen_height})};
 
-  // std::optional<aws::window_info> active{
-  //    std::in_place,
-  //    mrl::region_t{31, 55, 334, 207},
-  //    mrl::dimensions_t{screen_width, screen_height}};
+    if (!active) {
+      return 0;
+    }
 
-  // frc::collector collector{active->bounds().dimensions()};
-  // collector.collect(
-  //    file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
+    // std::optional<aws::window_info> active{
+    //    std::in_place,
+    //    mrl::region_t{31, 55, 334, 207},
+    //    mrl::dimensions_t{screen_width, screen_height}};
 
-  // auto& fragments{collector.fragments()};
-  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+    frc::collector collector{active->bounds().dimensions()};
+    collector.collect(
+        file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
 
-  // auto fragments1{read_fragments(ddir / "fgm")};
+    auto& fragments{collector.fragments()};
+    write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
 
-  // auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
-  //                                                      fragments1.end())};
+    auto fragments1{read_fragments(ddir / "fgm")};
 
-  // auto smap{spliced.front().blend().image_};
-  // auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c);
-  // }); write_rgb("smap.png", rgb_smp);
+    auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
+                                                          fragments1.end())};
 
-  // auto filtered{fdf::filter(
-  //    spliced,
-  //    file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
+    auto smap{spliced.front().blend().image_};
+    auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
+    write_rgb("smap.png", rgb_smp);
 
-  // write_fragments(ddir / "filt", filtered.begin(), filtered.end());
+    auto filtered{fdf::filter(
+        spliced,
+        file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
+
+    write_fragments(ddir / "filt", filtered.begin(), filtered.end());
+  }
 
   auto fragments3{read_fragments(ddir / "filt")};
 
