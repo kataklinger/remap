@@ -376,10 +376,10 @@ int main() {
   //  return 0;
   //}
 
-  //// std::optional<aws::window_info> active{
-  ////    std::in_place,
-  ////    mrl::region_t{31, 55, 334, 207},
-  ////    mrl::dimensions_t{screen_width, screen_height}};
+  // std::optional<aws::window_info> active{
+  //    std::in_place,
+  //    mrl::region_t{31, 55, 334, 207},
+  //    mrl::dimensions_t{screen_width, screen_height}};
 
   // frc::collector collector{active->bounds().dimensions()};
   // collector.collect(
@@ -401,25 +401,32 @@ int main() {
   //    spliced,
   //    file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
-  // auto fmap = std::max_element(filtered.begin(),
-  //                             filtered.end(),
-  //                             [](auto& lhs, auto& rhs) {
-  //                               return lhs.dots().size() < rhs.dots().size();
-  //                             })
-  //                ->blend()
-  //                .image_;
+  // write_fragments(ddir / "filt", filtered.begin(), filtered.end());
 
-  // auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c);
-  // });
+  auto fragments3{read_fragments(ddir / "filt")};
 
-  // write_rgb("fmap.png", rgb_fmp);
+  auto master{std::max_element(fragments3.begin(),
+                               fragments3.end(),
+                               [](auto& lhs, auto& rhs) {
+                                 return lhs.dots().size() < rhs.dots().size();
+                               })
+                  ->blend()};
 
-  arf::details::buffer<31> kk{};
-  for (std::uint8_t i{1}; i <= 31; ++i) {
-    kk.push({std::uint8_t(i & 0xf)});
-  }
+  auto rgb_fmp =
+      master.image_.map([](auto c) noexcept { return native_to_blend(c); });
 
-  arf::details::buffer_hash<31>{}(kk);
+  write_rgb("fmap.png", rgb_fmp);
+
+  auto heat{arf::details::generate_heatmap<15>(master)};
+
+  auto hmax{*std::max_element(heat.data(), heat.end(), std::less<>{})};
+
+  std::cout << hmax << std::endl;
+  auto rgb_ht = heat.map([hmax](auto c) noexcept {
+    return cpl::intensity_to_blend({1.0f / std::powf(c / 2.0f, 0.5)});
+  });
+
+  write_rgb("heat.png", rgb_ht);
 
   return 0;
 }
