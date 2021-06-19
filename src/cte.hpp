@@ -153,7 +153,7 @@ private:
       *first = {.id_ = horizon_id};
     }
 
-    auto size{(outline_.width() - 2) * outline_.height()};
+    auto size{outline_.width() * (outline_.height() - 2)};
     std::memset(first, 0, size * sizeof(cell_type));
 
     for (auto last{first + size - 2 * outline_.width()}; first <= last;
