@@ -6,6 +6,7 @@
 #include "fgm.hpp"
 
 #include <intrin.h>
+#include <numbers>
 #include <unordered_map>
 #include <utility>
 
@@ -178,9 +179,10 @@ namespace details {
     return result.map([](auto v) { return v ? *v : 0; });
   }
 
-  mrl::matrix<std::uint32_t> combine(mrl::matrix<std::uint32_t> const& left,
-                                     mrl::matrix<std::uint32_t> const& right) {
-    mrl::matrix<std::uint32_t> result{left.dimensions()};
+  [[nodiscard]] mrl::matrix<float>
+      combine(mrl::matrix<std::uint32_t> const& left,
+              mrl::matrix<std::uint32_t> const& right) {
+    mrl::matrix<float> result{left.dimensions()};
 
     auto out{result.data()};
     auto a{left.data()}, b{right.data()};
@@ -188,13 +190,16 @@ namespace details {
     constexpr auto step = sizeof(__m256i) / sizeof(std::uint32_t);
     for (auto last{out + result.size() - result.size() % step}; out < last;
          out += step, a += step, b += step) {
-      *reinterpret_cast<__m256i*>(out) =
+      auto sum{_mm256_cvtepi32_ps(
           _mm256_add_epi32(*reinterpret_cast<__m256i const*>(a),
-                           *reinterpret_cast<__m256i const*>(b));
+                           *reinterpret_cast<__m256i const*>(b)))};
+
+      *reinterpret_cast<__m256*>(out) =
+          _mm256_rsqrt_ps(_mm256_div_ps(sum, _mm256_set1_ps(2.0f)));
     }
 
     for (auto last{result.end()}; out < last; ++out, ++a, ++b) {
-      *out = *a + *b;
+      *out = 1.0f / std::sqrt((*a + *b) / 2.0f);
     }
 
     return result;
@@ -202,7 +207,7 @@ namespace details {
 
   template<std::uint8_t Size>
   requires odd_size<Size>
-  [[nodiscard]] mrl::matrix<std::uint32_t>
+  [[nodiscard]] mrl::matrix<float>
       generate_heatmap(fgm::fragment_blend const& fragment) {
 
     auto& image{fragment.image_};
@@ -215,6 +220,90 @@ namespace details {
 
     return combine(hor, ver);
   }
+
+  [[nodiscard]] mrl::matrix<float> gauss_kernel(float dev) {
+    using namespace std::numbers;
+
+    auto size{static_cast<mrl::size_type>(std::ceil(6.0f * dev)) | 1};
+    auto half{size / 2};
+
+    float d{2 * dev * dev};
+    float a{1 / (pi_v<float> * d)};
+
+    mrl::matrix<float> result{mrl::dimensions_t{size, size}, float{}};
+    auto out{result.data()};
+
+    for (mrl::size_type y{0}; y < result.height(); ++y) {
+      auto dy{static_cast<float>(y) - half};
+      for (mrl::size_type x{0}; x < result.width(); ++x, ++out) {
+        auto dx{static_cast<float>(x) - half};
+
+        *out = a * std::pow(e_v<float>, -(dy * dy + dx * dx) / d);
+      }
+    }
+
+    return result;
+  }
+
+  [[nodiscard]] mrl::matrix<cpl::nat_cc>
+      blur(fgm::fragment<16>::matrix_type const& dots,
+           mrl::matrix<float> const& heatmap) {
+    auto kernel{details::gauss_kernel(4.0f)};
+
+    auto size{kernel.width()};
+    auto margin{size / 2};
+
+    auto width{dots.width()};
+    auto vstride{margin * width};
+
+    auto kdata{kernel.data()};
+
+    auto input{dots.data()};
+    auto cond{heatmap.data()};
+
+    mrl::matrix<cpl::nat_cc> result{heatmap.dimensions()};
+    auto output{result.data()};
+
+    for (auto outer{input + margin}, ocend{dots.end() - vstride - margin};
+         outer < ocend;
+         outer += size) {
+      for (auto orend{outer + dots.width() - size}; outer < orend; ++outer) {
+        if (cond[outer - input] > 0.3f) {
+          auto k{kdata};
+          std::array<float, 16> temp{};
+
+          for (auto inner{outer - vstride - margin},
+               icend{outer + vstride - margin};
+               inner < icend;
+               inner += width - size) {
+            for (auto irend{inner + size}; inner < irend; ++inner, ++k) {
+              for (std::uint8_t i{0}; i < 16; ++i) {
+                if ((*outer)[i] > 0.0f) {
+                  temp[i] += (*inner)[i] * *k;
+                }
+              }
+            }
+          }
+
+          output[outer - input] = {static_cast<std::uint8_t>(
+              std::max_element(temp.begin(), temp.end()) - temp.begin())};
+        }
+        else {
+          output[outer - input] = {static_cast<std::uint8_t>(
+              std::max_element(outer->begin(), outer->end()) - outer->begin())};
+        }
+      }
+    }
+
+    return result;
+  }
+
 } // namespace details
+
+[[nodiscard]] mrl::matrix<cpl::nat_cc>
+    filter(fgm::fragment<16> const& fragment) {
+  auto heatmap{details::generate_heatmap<15>(fragment.blend())};
+  return details::blur(fragment.dots(), heatmap);
+}
 
 } // namespace arf

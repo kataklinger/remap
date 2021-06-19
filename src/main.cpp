@@ -370,7 +370,6 @@ int main() {
   write_rgb("merged.png", rgb_g);
 
   if (false) {
-
     auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
                           {screen_width, screen_height})};
 
@@ -399,7 +398,7 @@ int main() {
     auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
     write_rgb("smap.png", rgb_smp);
 
-    auto filtered{fdf::filter(
+    auto filtered{fdf::filter_all(
         spliced,
         file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
@@ -408,28 +407,21 @@ int main() {
 
   auto fragments3{read_fragments(ddir / "filt")};
 
-  auto master{std::max_element(fragments3.begin(),
-                               fragments3.end(),
-                               [](auto& lhs, auto& rhs) {
-                                 return lhs.dots().size() < rhs.dots().size();
-                               })
-                  ->blend()};
+  auto master{std::max_element(
+      fragments3.begin(), fragments3.end(), [](auto& lhs, auto& rhs) {
+        return lhs.dots().size() < rhs.dots().size();
+      })};
 
-  auto rgb_fmp =
-      master.image_.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_fmp = master->blend().image_.map(
+      [](auto c) noexcept { return native_to_blend(c); });
 
   write_rgb("fmap.png", rgb_fmp);
 
-  auto heat{arf::details::generate_heatmap<15>(master)};
+  auto art{arf::filter(*master)};
 
-  auto hmax{*std::max_element(heat.data(), heat.end(), std::less<>{})};
+  auto rgb_art = art.map([](auto c) noexcept { return native_to_blend(c); });
 
-  std::cout << hmax << std::endl;
-  auto rgb_ht = heat.map([hmax](auto c) noexcept {
-    return cpl::intensity_to_blend({1.0f / std::powf(c / 2.0f, 0.5)});
-  });
-
-  write_rgb("heat.png", rgb_ht);
+  write_rgb("art.png", rgb_art);
 
   return 0;
 }

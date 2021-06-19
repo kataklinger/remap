@@ -88,8 +88,8 @@ namespace details {
 
 template<std::uint8_t Depth, typename Feeder>
 [[nodiscard]] std::vector<fgm::fragment<Depth>>
-    filter(std::vector<fgm::fragment<Depth>> const& fragments,
-           Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
+    filter_all(std::vector<fgm::fragment<Depth>> const& fragments,
+               Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
   std::vector<details::blend_item<Depth>> blends{};
   for (auto& fragment : fragments) {
     auto& frames{fragment.frames()};
