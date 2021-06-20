@@ -24,9 +24,6 @@ struct frame {
   point_t position_;
 };
 
-struct no_content_tag {};
-inline constexpr no_content_tag no_content{};
-
 template<std::uint8_t Depth>
 class fragment {
 public:
@@ -41,14 +38,14 @@ public:
       , dots_{step_} {
   }
 
-  inline explicit fragment(mrl::dimensions_t step) noexcept
+  inline explicit fragment(mrl::dimensions_t const& step) noexcept
       : step_{step}
       , dots_{step} {
   }
 
   inline fragment(matrix_type dots,
-                  mrl::dimensions_t step,
-                  point_t zero,
+                  mrl::dimensions_t const& step,
+                  point_t const& zero,
                   std::vector<fgm::frame>&& frames) noexcept
       : step_{step}
       , dots_{std::move(dots)}
@@ -56,21 +53,25 @@ public:
       , frames_{std::move(frames)} {
   }
 
-  inline fragment(fragment const& other, no_content_tag /*unused*/) noexcept
-      : step_{other.step_}
-      , dots_{other.dots_.dimensions()}
-      , zero_{other.zero_} {
+  inline fragment(mrl::dimensions_t const& dimensions,
+                  point_t const& zero) noexcept
+      : step_{1, 1}
+      , dots_{dimensions}
+      , zero_{zero} {
   }
 
   template<typename Alloc1, typename Alloc2>
   void blit(point_t pos,
             mrl::matrix<cpl::nat_cc, Alloc1> const& image,
-            mrl::matrix<cpl::mon_bv, Alloc2> const& mask) {
+            mrl::matrix<cpl::mon_bv, Alloc2> const& mask,
+            std::size_t frame_no) {
     blit_impl(pos, image, [m = mask.data()](auto dst, auto src) mutable {
       if (value(*(m++)) == 0) {
         ++(*dst)[value(*src)];
       }
     });
+
+    frames_.emplace_back(frame_no, pos);
   }
 
   template<typename Alloc>

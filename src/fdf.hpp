@@ -6,41 +6,44 @@
 #include "fde.hpp"
 #include "fgm.hpp"
 
+#include <execution>
 #include <iterator>
 
 namespace fdf {
 
-namespace details {
-  template<std::uint8_t Depth>
-  struct blend_item {
-    using fragment_t = fgm::fragment<Depth>;
+struct background {
+  fgm::point_t zero_;
+  mrl::matrix<cpl::nat_cc> image_;
+};
 
+namespace details {
+
+  struct blend_item {
     fgm::frame frame_;
-    fragment_t const* original_;
+    background const* background_;
   };
 
   template<std::uint8_t Depth>
   class blender {
   public:
-    using blend_t = blend_item<Depth>;
-    using fragment_t = typename blend_t::fragment_t;
+    using fragment_t = typename fgm::fragment<Depth>;
 
   private:
     class output {
     public:
-      output(fragment_t const* original, mrl::dimensions_t const& dim)
-          : zero_{original->zero()}
-          , background_{original->blend()}
-          , extractor_{background_.image_, dim}
-          , result_{*original, fgm::no_content} {
+      output(background const* bgd, mrl::dimensions_t const& dim)
+          : background_{bgd}
+          , extractor_{background_->image_, dim}
+          , result_{background_->image_.dimensions(), background_->zero_} {
       }
 
       void update(mrl::matrix<cpl::nat_cc> const& image,
-                  fgm::point_t const& pos) {
-        auto foreground{extractor_.extract(image, pos - zero_)};
+                  fgm::frame const& frame) {
+        auto foreground{
+            extractor_.extract(image, frame.position_ - result_.zero())};
         auto mask{fde::mask(foreground, image.dimensions())};
 
-        result_.blit(pos, image, mask);
+        result_.blit(frame.position_, image, mask, frame.number_);
       }
 
       [[nodiscard]] inline fragment_t result() noexcept {
@@ -48,8 +51,7 @@ namespace details {
       }
 
     private:
-      fgm::point_t zero_;
-      fgm::fragment_blend background_;
+      background const* background_;
 
       fde::extractor<std::allocator<char>> extractor_;
 
@@ -57,10 +59,10 @@ namespace details {
     };
 
   public:
-    inline void update(blend_t const& item,
+    inline void update(blend_item const& item,
                        mrl::matrix<cpl::nat_cc> const& image) {
-      get_output(item.original_, image.dimensions())
-          .update(image, item.frame_.position_);
+      get_output(item.background_, image.dimensions())
+          .update(image, item.frame_);
     }
 
     [[nodiscard]] std::vector<fragment_t> result() && noexcept {
@@ -74,46 +76,88 @@ namespace details {
 
   private:
     [[nodiscard]] inline output&
-        get_output(fragment_t const* original,
+        get_output(background const* bgd,
                    mrl::dimensions_t const& dim) noexcept {
-      auto [it, success] = outputs_.try_emplace(original, original, dim);
+      auto [it, success] = outputs_.try_emplace(bgd, bgd, dim);
       return it->second;
     }
 
   private:
-    std::unordered_map<fragment_t const*, output> outputs_;
+    std::unordered_map<background const*, output> outputs_;
   };
+
+  template<std::uint8_t Depth>
+  [[nodiscard]] std::vector<background>
+      get_background(std::vector<fgm::fragment<Depth>> const& fragments) {
+    std::vector<background> results{fragments.size()};
+    std::transform(std::execution::par,
+                   fragments.begin(),
+                   fragments.end(),
+                   results.begin(),
+                   [](auto& f) {
+                     auto bkg{f.blend()};
+                     return background{f.zero(), std::move(bkg.image_)};
+                   });
+
+    return results;
+  }
+
+  template<std::uint8_t Depth>
+  [[nodiscard]] std::vector<blend_item>
+      get_items(std::vector<fgm::fragment<Depth>> const& fragments,
+                std::vector<background> const& backgrounds) {
+    std::vector<blend_item> results{};
+
+    std::size_t i{0};
+    for (auto& fragment : fragments) {
+      auto& frames{fragment.frames()};
+      std::transform(frames.begin(),
+                     frames.end(),
+                     std::back_inserter(results),
+                     [&backgrounds, i](auto& frame) {
+                       return blend_item{frame, &backgrounds[i]};
+                     });
+
+      ++i;
+    }
+
+    std::sort(results.begin(), results.end(), [](auto& left, auto& right) {
+      return left.frame_.number_ < right.frame_.number_;
+    });
+
+    return results;
+  }
 
 } // namespace details
 
 template<std::uint8_t Depth, typename Feeder>
 [[nodiscard]] std::vector<fgm::fragment<Depth>>
-    filter_all(std::vector<fgm::fragment<Depth>> const& fragments,
-               Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
-  std::vector<details::blend_item<Depth>> blends{};
-  for (auto& fragment : fragments) {
-    auto& frames{fragment.frames()};
-    std::transform(frames.begin(),
-                   frames.end(),
-                   std::back_inserter(blends),
-                   [&fragment](auto& frame) {
-                     return details::blend_item<Depth>{frame, &fragment};
-                   });
-  }
-
-  std::sort(blends.begin(), blends.end(), [](auto& left, auto& right) {
-    return left.frame_.number_ < right.frame_.number_;
-  });
+    filter(std::vector<fgm::fragment<Depth>> const& fragments,
+           std::vector<background> const& backgrounds,
+           Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
+  auto items{details::get_items(fragments, backgrounds)};
 
   details::blender<Depth> current{};
 
+  std::size_t i{0};
   while (feed.has_more()) {
     auto [no, image]{feed.produce()};
-    if (auto& blend{blends[no - 1]}; no == blend.frame_.number_) {
-      current.update(blend, image);
+    if (auto& item{items[i]}; no == item.frame_.number_) {
+      current.update(item, image);
+      ++i;
     }
   }
 
   return std::move(current).result();
 }
+
+template<std::uint8_t Depth, typename Feeder>
+[[nodiscard]] inline std::vector<fgm::fragment<Depth>>
+    filter(std::vector<fgm::fragment<Depth>> const& fragments,
+           Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
+  return filter(fragments,
+                details::get_background(fragments),
+                std::forward<Feeder>(feed));
+}
+
 } // namespace fdf

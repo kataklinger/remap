@@ -286,48 +286,52 @@ int main() {
   auto contours1{cext1.extract(median1)};
   auto contours2{cext2.extract(median2)};
 
-  mod::detector<cpl::nat_cc> mdet{2, 11};
-  auto motion{
-      mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
+  // mod::detector<cpl::nat_cc> mdet{2, 11};
+  // auto motion{
+  //    mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
 
-  mrl::matrix<cpl::rgb_bc> rgb_mh{image1.dimensions()};
-  mrl::matrix<cpl::rgb_bc> rgb_mv{image1.dimensions()};
+  // mrl::matrix<cpl::rgb_bc> rgb_mh{image1.dimensions()};
+  // mrl::matrix<cpl::rgb_bc> rgb_mv{image1.dimensions()};
 
-  perf_test(
-      [&mdet, &cext1, &cext2, &offset, &contours2]() {
-        auto motion{
-            mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
-      },
-      perf_loops,
-      "motion",
-      false);
+  // perf_test(
+  //    [&mdet, &cext1, &cext2, &offset, &contours2]() {
+  //      auto motion{
+  //          mdet.detect(cext1.outline(), cext2.outline(), *offset,
+  //          contours2)};
+  //    },
+  //    perf_loops,
+  //    "motion",
+  //    false);
 
-  for (auto const& contour : contours2) {
-    auto a{motion[contour.id()]};
-    auto [x, y]{motion[contour.id()]};
+  // for (auto const& contour : contours2) {
+  //  auto a{motion[contour.id()]};
+  //  auto [x, y]{motion[contour.id()]};
 
-    if (x < 0) {
-      contour.recover(rgb_mh.data(),
-                      cpl::pack_to_blend(
-                          {static_cast<std::uint8_t>(255 / 5 * -x)}, {}, {}));
-    }
-    else if (x > 0) {
-      contour.recover(
-          rgb_mh.data(),
-          cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * x)}, {}));
-    }
+  //  if (x < 0) {
+  //    contour.recover(rgb_mh.data(),
+  //                    cpl::pack_to_blend(
+  //                        {static_cast<std::uint8_t>(255 / 5 * -x)}, {}, {}));
+  //  }
+  //  else if (x > 0) {
+  //    contour.recover(
+  //        rgb_mh.data(),
+  //        cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * x)},
+  //        {}));
+  //  }
 
-    if (y < 0) {
-      contour.recover(rgb_mv.data(),
-                      cpl::pack_to_blend(
-                          {static_cast<std::uint8_t>(255 / 5 * (-y))}, {}, {}));
-    }
-    else if (y > 0) {
-      contour.recover(
-          rgb_mv.data(),
-          cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * y)}, {}));
-    }
-  }
+  //  if (y < 0) {
+  //    contour.recover(rgb_mv.data(),
+  //                    cpl::pack_to_blend(
+  //                        {static_cast<std::uint8_t>(255 / 5 * (-y))}, {},
+  //                        {}));
+  //  }
+  //  else if (y > 0) {
+  //    contour.recover(
+  //        rgb_mv.data(),
+  //        cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * y)},
+  //        {}));
+  //  }
+  //}
 
   mrl::matrix<cpl::nat_cc> diff{image1.dimensions()};
   for (auto& region : grid1.regions()) {
@@ -364,10 +368,15 @@ int main() {
   write_rgb("diff.png", rgb_d);
   write_rgb("contours.png", rgb_c);
 
-  write_rgb("motion_h.png", rgb_mh);
-  write_rgb("motion_v.png", rgb_mv);
+  // write_rgb("motion_h.png", rgb_mh);
+  // write_rgb("motion_v.png", rgb_mv);
 
   write_rgb("merged.png", rgb_g);
+
+  std::optional<aws::window_info> active{
+      std::in_place,
+      mrl::region_t{32, 56, 333, 206},
+      mrl::dimensions_t{screen_width, screen_height}};
 
   if (false) {
     auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
@@ -376,11 +385,6 @@ int main() {
     if (!active) {
       return 0;
     }
-
-    // std::optional<aws::window_info> active{
-    //    std::in_place,
-    //    mrl::region_t{31, 55, 334, 207},
-    //    mrl::dimensions_t{screen_width, screen_height}};
 
     frc::collector collector{active->bounds().dimensions()};
     collector.collect(
@@ -398,7 +402,7 @@ int main() {
     auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
     write_rgb("smap.png", rgb_smp);
 
-    auto filtered{fdf::filter_all(
+    auto filtered{fdf::filter(
         spliced,
         file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
@@ -412,16 +416,31 @@ int main() {
         return lhs.dots().size() < rhs.dots().size();
       })};
 
-  auto rgb_fmp = master->blend().image_.map(
-      [](auto c) noexcept { return native_to_blend(c); });
+  auto fmap{master->blend().image_};
+  auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c); });
 
   write_rgb("fmap.png", rgb_fmp);
 
-  auto art{arf::filter(*master)};
+  auto art1{arf::filter(*master, 2.0f, arf::filter_size<15>{})};
 
-  auto rgb_art = art.map([](auto c) noexcept { return native_to_blend(c); });
+  auto rgb_art1 = art1.map([](auto c) noexcept { return native_to_blend(c); });
 
-  write_rgb("art.png", rgb_art);
+  write_rgb("art1.png", rgb_art1);
+
+  auto filtered2{fdf::filter(
+      std::vector<fgm::fragment<16>>{*master},
+      std::vector<fdf::background>{{master->zero(), std::move(art1)}},
+      file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
+
+  auto rgb_fmp2 = filtered2.front().blend().image_.map(
+      [](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("fmap2.png", rgb_fmp2);
+
+  auto art2{arf::filter(filtered2.front(), 2.0f, arf::filter_size<15>{})};
+
+  auto rgb_art2 = art2.map([](auto c) noexcept { return native_to_blend(c); });
+
+  write_rgb("art2.png", rgb_art2);
 
   return 0;
 }

@@ -165,13 +165,14 @@ namespace details {
              current += instep) {
           buffer.reset();
         }
+        if (current < end) {
+          buffer.push(*current);
+          if (buffer.ready()) {
+            auto& count{counters[buffer.get()]};
+            ++count;
 
-        buffer.push(*current);
-        if (buffer.ready()) {
-          auto& count{counters[buffer.get()]};
-          ++count;
-
-          output[current - first - (Size / 2) * instep] = &count;
+            output[current - first - (Size / 2) * instep] = &count;
+          }
         }
       }
     }
@@ -247,8 +248,9 @@ namespace details {
 
   [[nodiscard]] mrl::matrix<cpl::nat_cc>
       blur(fgm::fragment<16>::matrix_type const& dots,
-           mrl::matrix<float> const& heatmap) {
-    auto kernel{details::gauss_kernel(4.0f)};
+           mrl::matrix<float> const& heatmap,
+           float dev) {
+    auto kernel{details::gauss_kernel(dev)};
 
     auto size{kernel.width()};
     auto margin{size / 2};
@@ -300,10 +302,16 @@ namespace details {
 
 } // namespace details
 
+template<std::uint8_t Size>
+using filter_size = std::integral_constant<std::uint8_t, Size>;
+
+template<std::uint8_t Size>
 [[nodiscard]] mrl::matrix<cpl::nat_cc>
-    filter(fgm::fragment<16> const& fragment) {
-  auto heatmap{details::generate_heatmap<15>(fragment.blend())};
-  return details::blur(fragment.dots(), heatmap);
+    filter(fgm::fragment<16> const& fragment,
+           float dev,
+           std::integral_constant<std::uint8_t, Size> /*unused*/) {
+  auto heatmap{details::generate_heatmap<Size>(fragment.blend())};
+  return details::blur(fragment.dots(), heatmap, dev);
 }
 
 } // namespace arf
