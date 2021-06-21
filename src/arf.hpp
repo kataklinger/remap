@@ -270,7 +270,7 @@ namespace details {
          outer < ocend;
          outer += size) {
       for (auto orend{outer + dots.width() - size}; outer < orend; ++outer) {
-        if (cond[outer - input] > 0.3f) {
+        if (cond[outer - input] > 0.25f) {
           auto k{kdata};
           std::array<float, 16> temp{};
 
