@@ -10,6 +10,7 @@
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
+#include "ncc.hpp"
 
 #include "pngu.hpp"
 
@@ -242,6 +243,13 @@ int main() {
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
+  auto packed{ncc::compress(image1)};
+  auto unpacked{ncc::decompress(packed, image1.dimensions())};
+
+  auto rgb_up =
+      unpacked.map([](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("unpacked.png", rgb_up);
+
   using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>, 16>;
 
   kpe_t extractor1{image1.dimensions()};
@@ -427,20 +435,21 @@ int main() {
 
   write_rgb("art1.png", rgb_art1);
 
-  auto filtered2{fdf::filter(
-      std::vector<fgm::fragment<16>>{*master},
-      std::vector<fdf::background>{{master->zero(), std::move(art1)}},
-      file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
+  // auto filtered2{fdf::filter(
+  //    std::vector<fgm::fragment<16>>{*master},
+  //    std::vector<fdf::background>{{master->zero(), std::move(art1)}},
+  //    file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
 
-  auto rgb_fmp2 = filtered2.front().blend().image_.map(
-      [](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("fmap2.png", rgb_fmp2);
+  // auto rgb_fmp2 = filtered2.front().blend().image_.map(
+  //    [](auto c) noexcept { return native_to_blend(c); });
+  // write_rgb("fmap2.png", rgb_fmp2);
 
-  auto art2{arf::filter(filtered2.front(), 2.0f, arf::filter_size<15>{})};
+  // auto art2{arf::filter(filtered2.front(), 2.0f, arf::filter_size<15>{})};
 
-  auto rgb_art2 = art2.map([](auto c) noexcept { return native_to_blend(c); });
+  // auto rgb_art2 = art2.map([](auto c) noexcept { return native_to_blend(c);
+  // });
 
-  write_rgb("art2.png", rgb_art2);
+  // write_rgb("art2.png", rgb_art2);
 
   return 0;
 }
