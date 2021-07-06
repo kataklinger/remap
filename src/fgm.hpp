@@ -19,9 +19,16 @@ struct fragment_blend {
   mrl::matrix<std::uint8_t> mask_;
 };
 
+struct packed_data {
+  std::vector<std::uint8_t> image_;
+  std::vector<std::uint8_t> median_;
+};
+
 struct frame {
   std::size_t number_;
   point_t position_;
+
+  packed_data data_;
 };
 
 template<std::uint8_t Depth>
@@ -77,12 +84,13 @@ public:
   template<typename Alloc>
   void blit(point_t pos,
             mrl::matrix<cpl::nat_cc, Alloc> const& image,
+            packed_data&& packed,
             std::size_t frame_no) {
     ensure(pos, image.dimensions());
 
     blit_impl(pos, image, [](auto dst, auto src) { ++(*dst)[value(*src)]; });
 
-    frames_.emplace_back(frame_no, pos);
+    frames_.emplace_back(frame_no, pos, std::move(packed));
   }
 
   void blit(point_t pos, fragment const& other) {
@@ -96,7 +104,7 @@ public:
 
     frames_.reserve(frames_.size() + other.frames_.size());
     for (auto& f : other.frames_) {
-      frames_.emplace_back(f.number_, f.position_ - other.zero_ + pos);
+      frames_.emplace_back(f.number_, f.position_ - other.zero_ + pos, f.data_);
     }
   }
 

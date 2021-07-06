@@ -51,6 +51,7 @@ namespace details {
       }
     }
   }
+
 } // namespace details
 
 template<typename Alloc>
@@ -79,18 +80,9 @@ public:
   }
 
   [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& frame,
+                                 mrl::matrix<cpl::nat_cc> const& median,
                                  fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
-
-    // TODO: create proper median filter instead of relying on keypoint
-    // extraction
-    kpe::extractor<kpr::grid<1, 1, std::allocator<char>>, 0> kpex{
-        frame.dimensions()};
-
-    mrl::matrix<cpl::nat_cc> median{frame.dimensions(), frame.get_allocator()};
-
-    [[maybe_unused]] auto xx{kpex.extract(frame, median)};
-    // end
 
     auto forground{contours_.extract(
         median, [m = mask_.data()](auto px, auto idx) { return m[idx] == 0; })};

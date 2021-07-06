@@ -89,9 +89,11 @@ public:
       , reg_mid_stride_{dimensions.height_ * reg_overlap} {
   }
 
-  [[nodiscard]] grid_type extract(matrix_type const& image,
-                                  matrix_type& median) {
-    grid_type grid{image.get_allocator()};
+  [[nodiscard]] grid_type
+      extract(matrix_type const& image,
+              matrix_type& median,
+              typename grid_type::allocator_type const& alloc) {
+    grid_type grid{alloc};
 
     auto tmp = temp_.data();
     for (auto row{image.data()}, last{image.end()}; row < last;

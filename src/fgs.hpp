@@ -30,7 +30,9 @@ namespace details {
     mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
 
     kpe::extractor<grid_t, 0> extractor{image.dimensions()};
-    return {&fragment, std::move(mask), extractor.extract(image, median)};
+    return {&fragment,
+            std::move(mask),
+            extractor.extract(image, median, image.get_allocator())};
   }
 
   template<std::uint8_t Depth, typename Iter>
@@ -209,7 +211,7 @@ namespace details {
 
   template<typename Ty>
   concept walker =
-      std::invocable<Ty>&& std::invocable<Ty, std::uint16_t, cdt::offset_t>;
+      std::invocable<Ty> && std::invocable<Ty, std::uint16_t, cdt::offset_t>;
 
   class graph {
   private:

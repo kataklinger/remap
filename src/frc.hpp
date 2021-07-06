@@ -56,15 +56,16 @@ public:
       : extractor_{dimensions} {
   }
 
-  template<typename Feeder>
-  void collect(Feeder&& feed) requires(ifd::feeder<std::decay_t<Feeder>>) {
+  template<typename Feeder, typename Comp>
+  void collect(Feeder&& feed,
+               Comp&& comp) requires(ifd::feeder<std::decay_t<Feeder>>) {
     if (feed.has_more()) {
       all::memory_pool ppool{0};
 
-      auto pkeys{process_init(feed, allocator_t<char>{ppool})};
+      auto pkeys{process_init(feed, comp, allocator_t<char>{ppool})};
       for (std::int32_t x{0}, y{0}; feed.has_more();) {
         all::memory_pool cpool{ppool.total_used() << 1};
-        pkeys = process_frame(feed, pkeys, allocator_t<char>{cpool});
+        pkeys = process_frame(feed, comp, pkeys, allocator_t<char>{cpool});
         ppool = std::move(cpool);
       }
     }
@@ -79,26 +80,29 @@ public:
   }
 
 private:
-  template<typename Feed>
-  auto process_init(Feed& feed, allocator_t<char> const& alloc) {
+  template<typename Feed, typename Comp>
+  auto process_init(Feed& feed, Comp& comp, allocator_t<char> const& alloc) {
     auto [no, image]{feed.produce(alloc)};
 
     add_fragment(image.dimensions());
 
-    blit(image, no);
-
     image_type median{image.dimensions(), alloc};
-    return extractor_.extract(image, median);
+    auto result{extractor_.extract(image, median, alloc)};
+
+    blit(comp, image, median, no);
+
+    return result;
   }
 
-  template<typename Feed>
+  template<typename Feed, typename Comp>
   auto process_frame(Feed& feed,
+                     Comp& comp,
                      grid_type const& previous,
                      allocator_t<char> const& alloc) {
     auto [no, image]{feed.produce(alloc)};
 
     image_type median{image.dimensions(), alloc};
-    auto keys{extractor_.extract(image, median)};
+    auto keys{extractor_.extract(image, median, alloc)};
 
     if (auto off{kpm::match(match_config{alloc}, previous, keys)}; off) {
       position_.x_ += off->x_;
@@ -108,7 +112,7 @@ private:
       add_fragment(image.dimensions());
     }
 
-    blit(image, no);
+    blit(comp, image, median, no);
 
     return keys;
   }
@@ -118,8 +122,12 @@ private:
     position_.x_ = position_.y_ = 0;
   }
 
-  inline void blit(image_type const& image, std::size_t frame_no) noexcept {
-    current_->blit(position_, image, frame_no);
+  template<typename Comp>
+  inline void blit(Comp& comp,
+                   image_type const& image,
+                   image_type const& median,
+                   std::size_t frame_no) noexcept {
+    current_->blit(position_, image, {comp(image), comp(median)}, frame_no);
   }
 
 private:

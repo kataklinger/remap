@@ -101,7 +101,20 @@ void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
     output.write(reinterpret_cast<char const*>(&frames), sizeof(frames));
 
     for (auto& frame : first->frames()) {
-      output.write(reinterpret_cast<char const*>(&frame), sizeof(frame));
+      output.write(reinterpret_cast<char const*>(&frame.number_),
+                   sizeof(frame.number_));
+      output.write(reinterpret_cast<char const*>(&frame.position_),
+                   sizeof(frame.position_));
+
+      auto size_i{frame.data_.image_.size()};
+      output.write(reinterpret_cast<char const*>(&size_i), sizeof(size_i));
+      output.write(reinterpret_cast<char const*>(frame.data_.image_.data()),
+                   size_i);
+
+      auto size_m{frame.data_.median_.size()};
+      output.write(reinterpret_cast<char const*>(&size_m), sizeof(size_m));
+      output.write(reinterpret_cast<char const*>(frame.data_.median_.data()),
+                   size_m);
     }
 
     output.close();
@@ -140,7 +153,21 @@ auto read_fragments(std::filesystem::path dir) {
     std::vector<fgm::frame> frames{};
     for (std::size_t i{0}; i < count; ++i) {
       fgm::frame frame{};
-      input.read(reinterpret_cast<char*>(&frame), sizeof(frame));
+
+      input.read(reinterpret_cast<char*>(&frame.number_),
+                 sizeof(frame.number_));
+      input.read(reinterpret_cast<char*>(&frame.position_),
+                 sizeof(frame.position_));
+
+      std::size_t size_i{};
+      input.read(reinterpret_cast<char*>(&size_i), sizeof(size_i));
+      frame.data_.image_.resize(size_i);
+      input.read(reinterpret_cast<char*>(frame.data_.image_.data()), size_i);
+
+      std::size_t size_m{};
+      input.read(reinterpret_cast<char*>(&size_m), sizeof(size_m));
+      frame.data_.median_.resize(size_m);
+      input.read(reinterpret_cast<char*>(frame.data_.median_.data()), size_m);
 
       frames.push_back(frame);
     }
@@ -260,14 +287,22 @@ int main() {
 
   perf_test(
       [&image1, &median1, &extractor1] {
-        [[maybe_unused]] auto grid{extractor1.extract(image1, median1)};
+        [[maybe_unused]] auto grid{
+            extractor1.extract(image1, median1, image1.get_allocator())};
       },
       perf_loops,
       "median",
       false);
 
-  auto grid1{extractor1.extract(image1, median1)};
-  auto grid2{extractor2.extract(image2, median2)};
+  auto grid1{extractor1.extract(image1, median1, image1.get_allocator())};
+  auto grid2{extractor2.extract(image2, median2, image1.get_allocator())};
+
+  auto packedm{ncc::compress(median1)};
+  auto unpackedm{ncc::decompress(packedm, median1.dimensions())};
+
+  auto rgb_upm =
+      unpackedm.map([](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("unpacked-med.png", rgb_upm);
 
   match_config cfg;
   auto offset{kpm::match(cfg, grid1, grid2)};
@@ -352,12 +387,12 @@ int main() {
     }
   }
 
-  fgm::fragment<16> frag{image1.dimensions()};
+  // fgm::fragment<16> frag{image1.dimensions()};
 
-  frag.blit({0, 0}, image1, 0);
-  frag.blit(*offset, image2, 1);
+  // frag.blit({0, 0}, image1, image1, 0);
+  // frag.blit(*offset, image2, image1, 1);
 
-  auto merged{frag.blend().image_};
+  // auto merged{frag.blend().image_};
 
   auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
   auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
@@ -367,7 +402,8 @@ int main() {
   auto rgb_c =
       recovered.map([](auto c) noexcept { return native_to_blend(c); });
 
-  auto rgb_g = merged.map([](auto c) noexcept { return native_to_blend(c); });
+  // auto rgb_g = merged.map([](auto c) noexcept { return native_to_blend(c);
+  // });
 
   write_rgb("original1.png", rgb_o1);
   write_rgb("original2.png", rgb_o2);
@@ -379,43 +415,48 @@ int main() {
   // write_rgb("motion_h.png", rgb_mh);
   // write_rgb("motion_v.png", rgb_mv);
 
-  write_rgb("merged.png", rgb_g);
+  // write_rgb("merged.png", rgb_g);
 
-  std::optional<aws::window_info> active{
-      std::in_place,
-      mrl::region_t{32, 56, 333, 206},
-      mrl::dimensions_t{screen_width, screen_height}};
+  // std::optional<aws::window_info> active{
+  //    std::in_place,
+  //    mrl::region_t{32, 56, 333, 206},
+  //    mrl::dimensions_t{screen_width, screen_height}};
+  // auto active_dim{active->bounds().dimensions()};
 
-  if (false) {
-    auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-                          {screen_width, screen_height})};
+  // if (false) {
+  auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
+                        {screen_width, screen_height})};
 
-    if (!active) {
-      return 0;
-    }
-
-    frc::collector collector{active->bounds().dimensions()};
-    collector.collect(
-        file_feed<frc::collector::image_type>{ddir / "seq", active->margins()});
-
-    auto& fragments{collector.fragments()};
-    write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
-
-    auto fragments1{read_fragments(ddir / "fgm")};
-
-    auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
-                                                          fragments1.end())};
-
-    auto smap{spliced.front().blend().image_};
-    auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
-    write_rgb("smap.png", rgb_smp);
-
-    auto filtered{fdf::filter(
-        spliced,
-        file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
-
-    write_fragments(ddir / "filt", filtered.begin(), filtered.end());
+  if (!active) {
+    return 0;
   }
+
+  auto active_dim{active->bounds().dimensions()};
+
+  frc::collector collector{active_dim};
+  collector.collect(
+      file_feed<frc::collector::image_type>{ddir / "seq", active->margins()},
+      [](auto& img) { return ncc::compress(img); });
+
+  auto& fragments{collector.fragments()};
+  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+
+  auto fragments1{read_fragments(ddir / "fgm")};
+
+  auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
+                                                        fragments1.end())};
+
+  auto smap{spliced.front().blend().image_};
+  auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
+  write_rgb("smap.png", rgb_smp);
+
+  auto filtered{
+      fdf::filter(spliced, active_dim, [](auto const& img, auto const& dim) {
+        return ncc::decompress(img, dim);
+      })};
+
+  write_fragments(ddir / "filt", filtered.begin(), filtered.end());
+  //}
 
   auto fragments3{read_fragments(ddir / "filt")};
 
