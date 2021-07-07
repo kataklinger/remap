@@ -37,7 +37,7 @@ template<typename Alloc>
       result.push_back(((len - 3) << 4) | current);
     }
     else {
-      auto bytes{len > 256 ? 2 : 1};
+      auto bytes{len > 255 ? 2 : 1};
       result.push_back(0x40 | (bytes << 4) | current);
       result.push_back(static_cast<std::uint8_t>(len));
       if (bytes == 2) {
