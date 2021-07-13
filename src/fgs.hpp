@@ -16,21 +16,20 @@ namespace details {
 
   template<std::uint8_t Depth>
   struct snippet {
-    fgm::fragment<Depth> const* fragment_{};
+    fgm::fragment<Depth> fragment_{};
     mrl::matrix<std::uint8_t> mask_;
 
     grid_t grid_;
   };
 
   template<std::uint8_t Depth>
-  [[nodiscard]] snippet<Depth>
-      extract_single(fgm::fragment<Depth> const& fragment) {
+  [[nodiscard]] snippet<Depth> extract_single(fgm::fragment<Depth>&& fragment) {
     auto [image, mask]{fragment.blend()};
 
     mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
 
     kpe::extractor<grid_t, 0> extractor{image.dimensions()};
-    return {&fragment,
+    return {std::move(fragment),
             std::move(mask),
             extractor.extract(image, median, image.get_allocator())};
   }
@@ -43,7 +42,7 @@ namespace details {
 
     std::transform(
         std::execution::par, first, last, snippets.begin(), [](auto& fragment) {
-          return extract_single(fragment);
+          return extract_single(std::move(fragment));
         });
 
     return snippets;
@@ -328,8 +327,8 @@ namespace details {
     using snippet_type = snippet<depth>;
 
   public:
-    inline explicit splicer(std::vector<snippet_type> const& snippets) noexcept
-        : snippets_{&snippets} {
+    inline explicit splicer(std::vector<snippet_type>&& snippets) noexcept
+        : snippets_{std::move(snippets)} {
     }
 
     inline void operator()() {
@@ -337,7 +336,7 @@ namespace details {
     }
 
     inline void operator()(std::uint16_t snippet, cdt::offset_t offset) {
-      result_.back().blit(offset, *(*snippets_)[snippet].fragment_);
+      result_.back().blit(offset, std::move(snippets_[snippet].fragment_));
     }
 
     [[nodiscard]] inline std::vector<fragment_t> const&
@@ -350,7 +349,7 @@ namespace details {
     }
 
   private:
-    std::vector<snippet_type> const* snippets_;
+    std::vector<snippet_type> snippets_;
     std::vector<fragment_t> result_;
   };
 
@@ -371,12 +370,13 @@ template<std::uint8_t Depth, typename Iter>
 [[nodiscard]] std::vector<fgm::fragment<Depth>> splice(Iter first, Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
+  auto size{snippets.size()};
 
   details::match_all(snippets, deltas);
-  details::crossmatch_all(deltas, snippets.size());
+  details::crossmatch_all(deltas, size);
 
-  details::splicer<Depth> spliced{snippets};
-  build_graph(deltas, snippets.size()).process(spliced);
+  details::splicer<Depth> spliced{std::move(snippets)};
+  build_graph(deltas, size).process(spliced);
 
   return std::move(spliced.result());
 }

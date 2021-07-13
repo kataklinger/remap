@@ -75,8 +75,8 @@ public:
     return *current_;
   }
 
-  [[nodiscard]] inline fragment_list const& fragments() const noexcept {
-    return fragments_;
+  [[nodiscard]] inline fragment_list complete() noexcept {
+    return std::move(fragments_);
   }
 
 private:

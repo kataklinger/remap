@@ -93,7 +93,7 @@ public:
     frames_.emplace_back(frame_no, pos, std::move(packed));
   }
 
-  void blit(point_t pos, fragment const& other) {
+  void blit(point_t pos, fragment&& other) {
     ensure(pos, other.dots_.dimensions());
 
     blit_impl(pos, other.dots_, [](auto dst, auto src) {
@@ -104,7 +104,8 @@ public:
 
     frames_.reserve(frames_.size() + other.frames_.size());
     for (auto& f : other.frames_) {
-      frames_.emplace_back(f.number_, f.position_ - other.zero_ + pos, f.data_);
+      frames_.emplace_back(
+          f.number_, f.position_ - other.zero_ + pos, std::move(f.data_));
     }
   }
 
