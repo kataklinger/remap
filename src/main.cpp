@@ -419,11 +419,10 @@ int main() {
 
   // std::optional<aws::window_info> active{
   //    std::in_place,
-  //    mrl::region_t{32, 56, 333, 206},
+  //    mrl::region_t{31, 55, 334, 207},
   //    mrl::dimensions_t{screen_width, screen_height}};
   // auto active_dim{active->bounds().dimensions()};
 
-  // if (false) {
   auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
                         {screen_width, screen_height})};
 
@@ -438,13 +437,13 @@ int main() {
       file_feed<frc::collector::image_type>{ddir / "seq", active->margins()},
       [](auto& img) { return ncc::compress(img); });
 
-  auto& fragments{collector.fragments()};
-  write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+  auto fragments{std::move(collector.complete())};
 
-  auto fragments1{read_fragments(ddir / "fgm")};
+  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
+  // auto fragments1{read_fragments(ddir / "fgm")};
 
-  auto spliced{fgs::splice<frc::collector::color_depth>(fragments1.begin(),
-                                                        fragments1.end())};
+  auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
+                                                        fragments.end())};
 
   auto smap{spliced.front().blend().image_};
   auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
@@ -455,13 +454,11 @@ int main() {
         return ncc::decompress(img, dim);
       })};
 
-  write_fragments(ddir / "filt", filtered.begin(), filtered.end());
-  //}
-
-  auto fragments3{read_fragments(ddir / "filt")};
+  // write_fragments(ddir / "filt", filtered.begin(), filtered.end());
+  // auto fragments3{read_fragments(ddir / "filt")};
 
   auto master{std::max_element(
-      fragments3.begin(), fragments3.end(), [](auto& lhs, auto& rhs) {
+      filtered.begin(), filtered.end(), [](auto& lhs, auto& rhs) {
         return lhs.dots().size() < rhs.dots().size();
       })};
 
