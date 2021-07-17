@@ -15,19 +15,31 @@ public:
   static constexpr float artifact_filter_dev{2.0f};
 
 public:
-  [[nodiscard]] feeder_type begin_feed() const {
+  inline explicit config(std::filesystem::path const& root) {
+    using namespace std::filesystem;
+    copy(directory_iterator{root}, directory_iterator{}, back_inserter{files_});
+    sort(files_.begin(), files_.end(), [](auto& a, auto& b) {
+      return stoi(a.filename().string()) < stoi(b.filename().string());
+    });
   }
 
-  [[nodiscard]] feeder_type begin_feed(mrl::region_t crop) const {
+  [[nodiscard]] inline feeder_type begin_feed() const {
+    return file_feed{files_};
+  }
+
+  [[nodiscard]] inline feeder_type begin_feed(mrl::region_t crop) const {
+    return file_feed{files_, crop};
   }
 
   [[nodiscard]] std::vector<std::uint8_t>
       compress(mrl::matrix<cpl::nat_cc> const& image) const {
+    return nic::compress(image);
   }
 
   [[nodiscard]] mrl::matrix<cpl::nat_cc>
       decompress(std::vector<std::uint8_t> const& compressed,
                  mrl::dimensions_t const& dim) const {
+    return nic::decompress(compressed, dim);
   }
 
   [[nodiscard]] mrl::dimension_t get_screen_size() const noexcept {
@@ -42,7 +54,8 @@ public:
     return artifact_filter_dev;
   }
 
-public:
+private:
+  vector_type files_;
 };
 
 template<typename Config>
