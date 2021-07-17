@@ -1,10 +1,10 @@
 
-// native-color c64 compression
+// native image compression
 
 #include "cpl.hpp"
 #include "mrl.hpp"
 
-namespace ncc {
+namespace nic {
 
 template<typename Alloc>
 [[nodiscard]] std::vector<std::uint8_t>
@@ -169,4 +169,4 @@ template<typename Alloc>
   return result;
 }
 
-} // namespace ncc
+} // namespace nic

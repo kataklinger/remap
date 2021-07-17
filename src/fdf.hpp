@@ -26,9 +26,9 @@ namespace details {
                    fragments.begin(),
                    fragments.end(),
                    results.begin(),
-                   [](auto& f) {
-                     auto bkg{f.blend()};
-                     return background{f.zero(), std::move(bkg.image_)};
+                   [](auto& frag) {
+                     auto bkg{frag.blend()};
+                     return background{frag.zero(), std::move(bkg.image_)};
                    });
 
     return results;

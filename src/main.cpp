@@ -10,7 +10,7 @@
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
-#include "ncc.hpp"
+#include "nic.hpp"
 
 #include "pngu.hpp"
 
@@ -270,8 +270,8 @@ int main() {
   auto image1{read_raw("raw1")};
   auto image2{read_raw("raw2")};
 
-  auto packed{ncc::compress(image1)};
-  auto unpacked{ncc::decompress(packed, image1.dimensions())};
+  auto packed{nic::compress(image1)};
+  auto unpacked{nic::decompress(packed, image1.dimensions())};
 
   auto rgb_up =
       unpacked.map([](auto c) noexcept { return native_to_blend(c); });
@@ -297,8 +297,8 @@ int main() {
   auto grid1{extractor1.extract(image1, median1, image1.get_allocator())};
   auto grid2{extractor2.extract(image2, median2, image1.get_allocator())};
 
-  auto packedm{ncc::compress(median1)};
-  auto unpackedm{ncc::decompress(packedm, median1.dimensions())};
+  auto packedm{nic::compress(median1)};
+  auto unpackedm{nic::decompress(packedm, median1.dimensions())};
 
   auto rgb_upm =
       unpackedm.map([](auto c) noexcept { return native_to_blend(c); });
@@ -435,9 +435,9 @@ int main() {
   frc::collector collector{active_dim};
   collector.collect(
       file_feed<frc::collector::image_type>{ddir / "seq", active->margins()},
-      [](auto& img) { return ncc::compress(img); });
+      [](auto& img) { return nic::compress(img); });
 
-  auto fragments{std::move(collector.complete())};
+  auto fragments{collector.complete()};
 
   // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
   // auto fragments1{read_fragments(ddir / "fgm")};
@@ -451,7 +451,7 @@ int main() {
 
   auto filtered{
       fdf::filter(spliced, active_dim, [](auto const& img, auto const& dim) {
-        return ncc::decompress(img, dim);
+        return nic::decompress(img, dim);
       })};
 
   // write_fragments(ddir / "filt", filtered.begin(), filtered.end());

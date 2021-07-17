@@ -24,8 +24,8 @@ add_executable (remap
 	"src/aws.hpp"
 	"src/fdf.hpp"
 	"src/arf.hpp"
-	"src/ncc.hpp"
-	
+	"src/nic.hpp"
+	"src/mpb.hpp"
 	"src/pngu.hpp"
 	"src/main.cpp")
 
