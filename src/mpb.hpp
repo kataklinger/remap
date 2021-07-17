@@ -30,16 +30,13 @@ public:
 
     frc::collector collector{window_dim};
     collector.collect(adapter_.get_feed(window->margins()),
-                      [this](auto& img) { return adapter_.compress(img); });
+                      adapter_.get_compression());
 
     auto fragments{collector.complete()};
 
     auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
                                                           fragments.end())};
-    auto filtered{fdf::filter(
-        spliced, window_dim, [this](auto const& img, auto const& dim) {
-          return adapter_.decompress(img, dim);
-        })};
+    auto filtered{fdf::filter(spliced, window_dim, adapter_.get_compression())};
 
     std::vector<mrl::matrix<cpl::nat_cc>> cleaned{filtered.size()};
     std::transform(
@@ -47,11 +44,9 @@ public:
         filtered.begin(),
         filtered.end(),
         cleaned.begin(),
-        [this](auto& fragment) {
+        [dev = adapter_.get_artifact_filter_dev()](auto& fragment) {
           return arf::filter(
-              fragment,
-              adapter_.get_artifact_filter_dev(),
-              arf::filter_size<adapter_type::artifact_filter_size>{});
+              fragment, dev, typename adapter_type::artifact_filter_size{});
         });
 
     return cleaned;

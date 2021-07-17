@@ -63,11 +63,26 @@ private:
   std::optional<mrl::region_t> crop_;
 };
 
+class native_compression {
+public:
+  template<typename Alloc>
+  [[nodiscard]] std::vector<std::uint8_t>
+      operator()(mrl::matrix<cpl::nat_cc, Alloc> const& image) const {
+    return nic::compress(image);
+  }
+
+  [[nodiscard]] mrl::matrix<cpl::nat_cc>
+      operator()(std::vector<std::uint8_t> const& compressed,
+                 mrl::dimensions_t const& dim) const {
+    return nic::decompress(compressed, dim);
+  }
+};
+
 class build_adapter {
 public:
   static constexpr mrl::dimensions_t screen_dimensions{388, 312};
-  static constexpr std::uint8_t artifact_filter_size{15};
   static constexpr float artifact_filter_dev{2.0f};
+  using artifact_filter_size = arf::filter_size<15>;
 
 public:
   inline explicit build_adapter(std::filesystem::path const& root) {
@@ -89,24 +104,12 @@ public:
     return file_feed{screen_dimensions, files_, crop};
   }
 
-  template<typename Alloc>
-  [[nodiscard]] std::vector<std::uint8_t>
-      compress(mrl::matrix<cpl::nat_cc, Alloc> const& image) const {
-    return nic::compress(image);
-  }
-
-  [[nodiscard]] mrl::matrix<cpl::nat_cc>
-      decompress(std::vector<std::uint8_t> const& compressed,
-                 mrl::dimensions_t const& dim) const {
-    return nic::decompress(compressed, dim);
+  [[nodiscard]] native_compression get_compression() const {
+    return native_compression{};
   }
 
   [[nodiscard]] mrl::dimensions_t get_screen_dimensions() const noexcept {
     return screen_dimensions;
-  }
-
-  [[nodiscard]] std::uint8_t get_artifact_filter_size() const noexcept {
-    return artifact_filter_size;
   }
 
   [[nodiscard]] float get_artifact_filter_dev() const noexcept {
