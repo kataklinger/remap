@@ -10,6 +10,7 @@
 #include "kpe.hpp"
 #include "kpm.hpp"
 #include "mod.hpp"
+#include "mpb.hpp"
 #include "nic.hpp"
 
 #include "pngu.hpp"
@@ -181,6 +182,8 @@ auto read_fragments(std::filesystem::path dir) {
   return result;
 }
 
+using file_list = std::vector<std::filesystem::path>;
+
 template<typename Image>
 class file_feed {
 public:
@@ -188,9 +191,6 @@ public:
   using frame_type = ifd::frame<image_type>;
 
   using allocator_type = typename image_type::allocator_type;
-
-private:
-  using vector_type = std::vector<std::filesystem::path>;
 
 public:
   explicit file_feed(std::filesystem::path const& root,
@@ -204,9 +204,14 @@ public:
              std::stoi(b.filename().string());
     });
 
-    // files_.resize(900);
-
     next_ = files_.begin();
+  }
+
+  inline explicit file_feed(file_list const& files,
+                            std::optional<mrl::region_t> crop = {})
+      : files_{files}
+      , next_{files_.begin()}
+      , crop_{crop} {
   }
 
   [[nodiscard]] inline bool has_more() const noexcept {
@@ -255,13 +260,69 @@ public:
   }
 
 private:
-  vector_type files_;
-  vector_type::iterator next_;
+  file_list files_;
+  file_list::iterator next_;
 
   std::optional<mrl::region_t> crop_;
 
-  std::uint64_t start_time_{0};
-  std::uint64_t last_time_{0};
+  std::uint64_t start_time_{};
+  std::uint64_t last_time_{};
+};
+
+class build_adapter {
+public:
+  static constexpr mrl::dimensions_t screen_size{388, 312};
+  static constexpr std::uint8_t artifact_filter_size{15};
+  static constexpr float artifact_filter_dev{2.0f};
+
+public:
+  inline explicit build_adapter(std::filesystem::path const& root) {
+    using namespace std::filesystem;
+    std::copy(directory_iterator{root},
+              directory_iterator{},
+              std::back_inserter(files_));
+
+    std::sort(files_.begin(), files_.end(), [](auto& a, auto& b) {
+      return stoi(a.filename().string()) < stoi(b.filename().string());
+    });
+  }
+
+  template<typename Image>
+  [[nodiscard]] inline file_feed<Image> begin_feed() const {
+    return file_feed<Image>{files_};
+  }
+
+  template<typename Image>
+  [[nodiscard]] inline file_feed<Image> begin_feed(mrl::region_t crop) const {
+    return file_feed<Image>{files_, crop};
+  }
+
+  template<typename Alloc>
+  [[nodiscard]] std::vector<std::uint8_t>
+      compress(mrl::matrix<cpl::nat_cc, Alloc> const& image) const {
+    return nic::compress(image);
+  }
+
+  [[nodiscard]] mrl::matrix<cpl::nat_cc>
+      decompress(std::vector<std::uint8_t> const& compressed,
+                 mrl::dimensions_t const& dim) const {
+    return nic::decompress(compressed, dim);
+  }
+
+  [[nodiscard]] mrl::dimensions_t get_screen_size() const noexcept {
+    return screen_size;
+  }
+
+  [[nodiscard]] std::uint8_t get_artifact_filter_size() const noexcept {
+    return artifact_filter_size;
+  }
+
+  [[nodiscard]] float get_artifact_filter_dev() const noexcept {
+    return artifact_filter_dev;
+  }
+
+private:
+  file_list files_;
 };
 
 int main() {
@@ -488,6 +549,10 @@ int main() {
   // });
 
   // write_rgb("art2.png", rgb_art2);
+
+  mpb::builder builder{build_adapter{ddir / "seq"}};
+
+  auto result{builder.build()};
 
   return 0;
 }

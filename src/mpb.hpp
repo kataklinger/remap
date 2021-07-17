@@ -6,70 +6,19 @@
 
 namespace mpb {
 
-class config {
-public:
-  using feeder_type = Feeder;
-
-  static constexpr mrl::dimension_t screen_size{388, 312};
-  static constexpr std::uint8_t artifact_filter_size{15};
-  static constexpr float artifact_filter_dev{2.0f};
-
-public:
-  inline explicit config(std::filesystem::path const& root) {
-    using namespace std::filesystem;
-    copy(directory_iterator{root}, directory_iterator{}, back_inserter{files_});
-    sort(files_.begin(), files_.end(), [](auto& a, auto& b) {
-      return stoi(a.filename().string()) < stoi(b.filename().string());
-    });
-  }
-
-  [[nodiscard]] inline feeder_type begin_feed() const {
-    return file_feed{files_};
-  }
-
-  [[nodiscard]] inline feeder_type begin_feed(mrl::region_t crop) const {
-    return file_feed{files_, crop};
-  }
-
-  [[nodiscard]] std::vector<std::uint8_t>
-      compress(mrl::matrix<cpl::nat_cc> const& image) const {
-    return nic::compress(image);
-  }
-
-  [[nodiscard]] mrl::matrix<cpl::nat_cc>
-      decompress(std::vector<std::uint8_t> const& compressed,
-                 mrl::dimensions_t const& dim) const {
-    return nic::decompress(compressed, dim);
-  }
-
-  [[nodiscard]] mrl::dimension_t get_screen_size() const noexcept {
-    return screen_size;
-  }
-
-  [[nodiscard]] std::uint8_t get_artifact_filter_size() const noexcept {
-    return artifact_filter_size;
-  }
-
-  [[nodiscard]] float get_artifact_filter_dev() const noexcept {
-    return artifact_filter_dev;
-  }
-
-private:
-  vector_type files_;
-};
-
-template<typename Config>
+template<typename Adapter>
 class builder {
 public:
-  using config_type = Config;
+  using adapter_type = Adapter;
 
 public:
-  inline builder(config_type const& config) noexcept
-      : config_{config} {
+  inline builder(adapter_type const& adapter) noexcept
+      : adapter_{adapter} {
   }
 
   [[nodiscard]] std::vector<mrl::matrix<cpl::nat_cc>> build() {
-    auto window{aws::scan(config_.begin_feed(), config_.get_screen_size()))};
+    auto window{aws::scan(adapter_.template begin_feed<mrl::matrix<cpl::nat_cc>>(),
+                          adapter_.get_screen_size())};
     if (!window) {
       return {};
     }
@@ -77,34 +26,36 @@ public:
     auto window_dim{window->bounds().dimensions()};
 
     frc::collector collector{window_dim};
-    collector.collect(config.begin_feed(window->margins()),
-                      [&config_](auto& img) { return config_.compress(img); });
+    collector.collect(
+        adapter_.template begin_feed<frc::collector::image_type>(window->margins()),
+        [this](auto& img) { return adapter_.compress(img); });
 
     auto fragments{collector.complete()};
 
     auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
                                                           fragments.end())};
     auto filtered{fdf::filter(
-        spliced, window_dim, [&config_](auto const& img, auto const& dim) {
-          return config_.decompress(img, dim);
+        spliced, window_dim, [this](auto const& img, auto const& dim) {
+          return adapter_.decompress(img, dim);
         })};
 
     std::vector<mrl::matrix<cpl::nat_cc>> cleaned{filtered.size()};
-    std::transform(std::execution::par,
-                   filtered.begin(),
-                   filtered.end(),
-                   cleaned.begin(),
-                   [&config_](auto& fragment) {
-                     return arf::filter(
-                         fragment,
-                         config_.get_artifact_filter_dev(),
-                         arf::filter_size<config_type::artifact_filter_size>{});
-                   });
+    std::transform(
+        std::execution::par,
+        filtered.begin(),
+        filtered.end(),
+        cleaned.begin(),
+        [this](auto& fragment) {
+          return arf::filter(
+              fragment,
+              adapter_.get_artifact_filter_dev(),
+              arf::filter_size<adapter_type::artifact_filter_size>{});
+        });
 
-    return cleared;
+    return cleaned;
   }
 
 private:
-  config_type config_;
+  adapter_type adapter_;
 };
 } // namespace mpb
