@@ -13,7 +13,6 @@
 namespace aws {
 namespace details {
   using heatmap_t = mrl::matrix<cpl::mon_bv>;
-  using contour_t = ctr::contour<cpl::mon_bv>;
 
   template<typename Image>
   inline constexpr auto pixel_size_v{sizeof(typename Image::value_type)};
@@ -53,8 +52,8 @@ namespace details {
     }
   }
 
-  [[nodiscard]] inline contour_t
-      get_best(std::vector<contour_t>&& contours) noexcept {
+  template<typename Container>
+  [[nodiscard]] inline auto get_best(Container const& contours) noexcept {
     return *std::min_element(
         contours.begin(), contours.end(), [](auto& lhs, auto& rhs) {
           return lhs.area() * value(lhs.color()) <
@@ -105,7 +104,8 @@ template<typename Feeder>
 
     all::memory_pool ppool{0};
 
-    cte::extractor<cpl::mon_bv> extractor{dimensions};
+    cte::extractor<cpl::mon_bv, pixel_alloc_t> extractor{dimensions,
+                                                         pixel_alloc_t{ppool}};
     details::heatmap_t heatmap{dimensions, {1}};
 
     auto [pno, pimage]{feed.produce(pixel_alloc_t{ppool})};
