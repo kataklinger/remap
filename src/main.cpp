@@ -1,15 +1,5 @@
 ﻿
-#include "arf.hpp"
-#include "aws.hpp"
-#include "cte.hpp"
-#include "fde.hpp"
-#include "fdf.hpp"
-#include "fgm.hpp"
-#include "fgs.hpp"
-#include "frc.hpp"
-#include "kpe.hpp"
-#include "kpm.hpp"
-#include "mod.hpp"
+
 #include "mpb.hpp"
 #include "nic.hpp"
 
@@ -24,192 +14,15 @@
 #include <queue>
 #include <string>
 
-inline constexpr std::size_t screen_width = 388;
-inline constexpr std::size_t screen_height = 312;
-inline constexpr mrl::dimensions_t screen_dimensions{screen_width,
-                                                     screen_height};
-
-inline std::uint64_t now() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
-template<typename Fn>
-requires std::invocable<Fn>
-void perf_test(Fn&& fn, std::size_t count, std::string const& name, bool run) {
-  if (!run) {
-    return;
-  }
-
-  auto start = now();
-  for (auto i{count}; i > 0; --i) {
-    fn();
-  }
-  auto end = now();
-
-  std::cout << "[ " << name << " ] "
-            << "[ count: " << count << "; time: " << end - start << " ]\n";
-}
-
-struct match_config {
-  using allocator_type = std::allocator<char>;
-  static constexpr std::size_t weight_switch{10};
-  static constexpr std::size_t region_votes{3};
-
-  allocator_type get_allocator() const noexcept {
-    return allocator_type{};
-  }
-};
-
-std::filesystem::path const ddir{"../../../data/"};
-
-mrl::matrix<cpl::nat_cc> read_raw(std::string filename) {
-  mrl::matrix<cpl::nat_cc> temp{screen_dimensions};
-
-  std::ifstream input;
-  input.open(ddir / filename, std::ios::in | std::ios::binary);
-  if (!input.is_open()) {
-    return temp;
-  }
-
-  input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
-  input.close();
-
-  return temp.crop({32, 56, 55, 106});
-}
-
-void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
-  png::write(ddir / filename, image.width(), image.height(), image.data());
-}
-
-template<typename Iter>
-void write_fragments(std::filesystem::path dir, Iter first, Iter last) {
-  for (auto i{0}; first != last; ++first, ++i) {
-    std::fstream output;
-    output.open(dir / std::to_string(i), std::ios::out | std::ios::binary);
-
-    auto dim{first->dots().dimensions()};
-    output.write(reinterpret_cast<char const*>(&dim), sizeof(dim));
-
-    output.write(reinterpret_cast<char const*>(first->dots().data()),
-                 first->dots().dimensions().area() * sizeof(fgm::dot_t<16>));
-
-    auto zero{first->zero()};
-    output.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
-
-    auto frames{first->frames().size()};
-    output.write(reinterpret_cast<char const*>(&frames), sizeof(frames));
-
-    for (auto& frame : first->frames()) {
-      output.write(reinterpret_cast<char const*>(&frame.number_),
-                   sizeof(frame.number_));
-      output.write(reinterpret_cast<char const*>(&frame.position_),
-                   sizeof(frame.position_));
-
-      auto size_i{frame.data_.image_.size()};
-      output.write(reinterpret_cast<char const*>(&size_i), sizeof(size_i));
-      output.write(reinterpret_cast<char const*>(frame.data_.image_.data()),
-                   size_i);
-
-      auto size_m{frame.data_.median_.size()};
-      output.write(reinterpret_cast<char const*>(&size_m), sizeof(size_m));
-      output.write(reinterpret_cast<char const*>(frame.data_.median_.data()),
-                   size_m);
-    }
-
-    output.close();
-  }
-}
-
-auto read_fragments(std::filesystem::path dir) {
-  using namespace std::filesystem;
-  using fragment_t = fgm::fragment<16>;
-
-  std::vector<std::filesystem::path> files;
-  std::copy(
-      directory_iterator(dir), directory_iterator(), back_inserter(files));
-  std::sort(files.begin(), files.end(), [](auto& a, auto& b) {
-    return std::stoi(a.filename().string()) < std::stoi(b.filename().string());
-  });
-
-  std::vector<fragment_t> result;
-  for (auto& file : files) {
-    std::ifstream input;
-    input.open(file, std::ios::in | std::ios::binary);
-
-    mrl::dimensions_t dim{};
-    input.read(reinterpret_cast<char*>(&dim), sizeof(mrl::dimensions_t));
-
-    fragment_t::matrix_type temp{dim};
-    input.read(reinterpret_cast<char*>(temp.data()),
-               dim.area() * sizeof(fgm::dot_t<16>));
-
-    fgm::point_t zero{};
-    input.read(reinterpret_cast<char*>(&zero), sizeof(zero));
-
-    std::size_t count{};
-    input.read(reinterpret_cast<char*>(&count), sizeof(count));
-
-    std::vector<fgm::frame> frames{};
-    for (std::size_t i{0}; i < count; ++i) {
-      fgm::frame frame{};
-
-      input.read(reinterpret_cast<char*>(&frame.number_),
-                 sizeof(frame.number_));
-      input.read(reinterpret_cast<char*>(&frame.position_),
-                 sizeof(frame.position_));
-
-      std::size_t size_i{};
-      input.read(reinterpret_cast<char*>(&size_i), sizeof(size_i));
-      frame.data_.image_.resize(size_i);
-      input.read(reinterpret_cast<char*>(frame.data_.image_.data()), size_i);
-
-      std::size_t size_m{};
-      input.read(reinterpret_cast<char*>(&size_m), sizeof(size_m));
-      frame.data_.median_.resize(size_m);
-      input.read(reinterpret_cast<char*>(frame.data_.median_.data()), size_m);
-
-      frames.push_back(frame);
-    }
-
-    input.close();
-
-    result.emplace_back(
-        std::move(temp), mrl::dimensions_t{1, 1}, zero, std::move(frames));
-  }
-
-  return result;
-}
-
 using file_list = std::vector<std::filesystem::path>;
 
-template<typename Image>
 class file_feed {
 public:
-  using image_type = Image;
-  using frame_type = ifd::frame<image_type>;
-
-  using allocator_type = typename image_type::allocator_type;
-
-public:
-  explicit file_feed(std::filesystem::path const& root,
-                     std::optional<mrl::region_t> crop = {})
-      : crop_{crop} {
-    using namespace std::filesystem;
-    std::copy(
-        directory_iterator(root), directory_iterator(), back_inserter(files_));
-    std::sort(files_.begin(), files_.end(), [](auto& a, auto& b) {
-      return std::stoi(a.filename().string()) <
-             std::stoi(b.filename().string());
-    });
-
-    next_ = files_.begin();
-  }
-
-  inline explicit file_feed(file_list const& files,
-                            std::optional<mrl::region_t> crop = {})
-      : files_{files}
+  inline file_feed(mrl::dimensions_t const& dimensions,
+                   file_list const& files,
+                   std::optional<mrl::region_t> crop = {})
+      : dimensions_{dimensions}
+      , files_{files}
       , next_{files_.begin()}
       , crop_{crop} {
   }
@@ -218,60 +31,41 @@ public:
     return next_ != files_.end();
   }
 
-  [[nodiscard]] inline frame_type produce() {
-    return produce(allocator_type{});
-  }
+  template<typename Alloc>
+  [[nodiscard]] auto produce(Alloc alloc) {
+    using image_type = mrl::matrix<cpl::nat_cc, Alloc>;
+    using frame_type = ifd::frame<image_type>;
 
-  [[nodiscard]] frame_type produce(allocator_type alloc) {
-    auto current{next_++};
+    image_type temp{dimensions_, alloc};
 
-    auto count = current - files_.begin();
-    if (count % 100 == 0) {
-      auto this_time_{now()};
-      if (last_time_ > 0) {
-        std::cout << "#" << count << " ~ " << this_time_ - last_time_ << " @ "
-                  << this_time_ - start_time_ << std::endl;
-      }
-      else {
-        start_time_ = this_time_;
-      }
-
-      last_time_ = this_time_;
-    }
-
-    mrl::matrix<cpl::nat_cc, allocator_type> temp{screen_dimensions, alloc};
-
-    auto no{static_cast<std::size_t>(next_ - files_.begin())};
-
-    std::ifstream input;
-    input.open(*current, std::ios::in | std::ios::binary);
+    std::ifstream input{*(next_++), std::ios::in | std::ios::binary};
     if (!input.is_open()) {
-      return {no, temp};
+      return frame_type{frame_number(), temp};
     }
 
     input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
-    input.close();
 
-    if (crop_) {
-      return {no, temp.crop(*crop_)};
-    }
-
-    return {no, temp};
+    return crop_ ? frame_type{frame_number(), temp.crop(*crop_)}
+                 : frame_type{frame_number(), temp};
   }
 
 private:
+  [[nodiscard]] inline std::size_t frame_number() const {
+    return static_cast<std::size_t>(next_ - files_.begin() - 1);
+  }
+
+private:
+  mrl::dimensions_t dimensions_;
+
   file_list files_;
   file_list::iterator next_;
 
   std::optional<mrl::region_t> crop_;
-
-  std::uint64_t start_time_{};
-  std::uint64_t last_time_{};
 };
 
 class build_adapter {
 public:
-  static constexpr mrl::dimensions_t screen_size{388, 312};
+  static constexpr mrl::dimensions_t screen_dimensions{388, 312};
   static constexpr std::uint8_t artifact_filter_size{15};
   static constexpr float artifact_filter_dev{2.0f};
 
@@ -287,14 +81,12 @@ public:
     });
   }
 
-  template<typename Image>
-  [[nodiscard]] inline file_feed<Image> begin_feed() const {
-    return file_feed<Image>{files_};
+  [[nodiscard]] inline file_feed get_feed() const {
+    return file_feed{screen_dimensions, files_};
   }
 
-  template<typename Image>
-  [[nodiscard]] inline file_feed<Image> begin_feed(mrl::region_t crop) const {
-    return file_feed<Image>{files_, crop};
+  [[nodiscard]] inline file_feed get_feed(mrl::region_t crop) const {
+    return file_feed{screen_dimensions, files_, crop};
   }
 
   template<typename Alloc>
@@ -309,8 +101,8 @@ public:
     return nic::decompress(compressed, dim);
   }
 
-  [[nodiscard]] mrl::dimensions_t get_screen_size() const noexcept {
-    return screen_size;
+  [[nodiscard]] mrl::dimensions_t get_screen_dimensions() const noexcept {
+    return screen_dimensions;
   }
 
   [[nodiscard]] std::uint8_t get_artifact_filter_size() const noexcept {
@@ -326,232 +118,9 @@ private:
 };
 
 int main() {
-  constexpr std::size_t perf_loops{1000};
-
-  auto image1{read_raw("raw1")};
-  auto image2{read_raw("raw2")};
-
-  auto packed{nic::compress(image1)};
-  auto unpacked{nic::decompress(packed, image1.dimensions())};
-
-  auto rgb_up =
-      unpacked.map([](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("unpacked.png", rgb_up);
-
-  using kpe_t = kpe::extractor<kpr::grid<4, 2, std::allocator<char>>, 16>;
-
-  kpe_t extractor1{image1.dimensions()};
-  kpe_t extractor2{image1.dimensions()};
-
-  mrl::matrix<cpl::nat_cc> median1{image1.dimensions()};
-  mrl::matrix<cpl::nat_cc> median2{image1.dimensions()};
-
-  perf_test(
-      [&image1, &median1, &extractor1] {
-        [[maybe_unused]] auto grid{
-            extractor1.extract(image1, median1, image1.get_allocator())};
-      },
-      perf_loops,
-      "median",
-      false);
-
-  auto grid1{extractor1.extract(image1, median1, image1.get_allocator())};
-  auto grid2{extractor2.extract(image2, median2, image1.get_allocator())};
-
-  auto packedm{nic::compress(median1)};
-  auto unpackedm{nic::decompress(packedm, median1.dimensions())};
-
-  auto rgb_upm =
-      unpackedm.map([](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("unpacked-med.png", rgb_upm);
-
-  match_config cfg;
-  auto offset{kpm::match(cfg, grid1, grid2)};
-
-  perf_test(
-      [&cfg, &grid1, &grid2]() {
-        [[maybe_unused]] auto result{kpm::match(cfg, grid1, grid2)};
-      },
-      perf_loops,
-      "match",
-      false);
-
-  cte::extractor<cpl::nat_cc>::allocator_type alloc{};
-  cte::extractor<cpl::nat_cc> cext1{image1.dimensions(), alloc};
-  cte::extractor<cpl::nat_cc> cext2{image1.dimensions(), alloc};
-
-  perf_test([&cext1, &median1]() { auto contours{cext1.extract(median1)}; },
-            perf_loops,
-            "contour",
-            false);
-
-  mrl::matrix<cpl::nat_cc> recovered{image1.dimensions()};
-
-  auto contours1{cext1.extract(median1)};
-  auto contours2{cext2.extract(median2)};
-
-  // mod::detector<cpl::nat_cc> mdet{2, 11};
-  // auto motion{
-  //    mdet.detect(cext1.outline(), cext2.outline(), *offset, contours2)};
-
-  // mrl::matrix<cpl::rgb_bc> rgb_mh{image1.dimensions()};
-  // mrl::matrix<cpl::rgb_bc> rgb_mv{image1.dimensions()};
-
-  // perf_test(
-  //    [&mdet, &cext1, &cext2, &offset, &contours2]() {
-  //      auto motion{
-  //          mdet.detect(cext1.outline(), cext2.outline(), *offset,
-  //          contours2)};
-  //    },
-  //    perf_loops,
-  //    "motion",
-  //    false);
-
-  // for (auto const& contour : contours2) {
-  //  auto a{motion[contour.id()]};
-  //  auto [x, y]{motion[contour.id()]};
-
-  //  if (x < 0) {
-  //    contour.recover(rgb_mh.data(),
-  //                    cpl::pack_to_blend(
-  //                        {static_cast<std::uint8_t>(255 / 5 * -x)}, {}, {}));
-  //  }
-  //  else if (x > 0) {
-  //    contour.recover(
-  //        rgb_mh.data(),
-  //        cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * x)},
-  //        {}));
-  //  }
-
-  //  if (y < 0) {
-  //    contour.recover(rgb_mv.data(),
-  //                    cpl::pack_to_blend(
-  //                        {static_cast<std::uint8_t>(255 / 5 * (-y))}, {},
-  //                        {}));
-  //  }
-  //  else if (y > 0) {
-  //    contour.recover(
-  //        rgb_mv.data(),
-  //        cpl::pack_to_blend({}, {static_cast<std::uint8_t>(255 / 5 * y)},
-  //        {}));
-  //  }
-  //}
-
-  mrl::matrix<cpl::nat_cc> diff{image1.dimensions()};
-  for (auto& region : grid1.regions()) {
-    for (auto& [key, points] : region.points()) {
-      cpl::nat_cc value{static_cast<std::uint8_t>(kpr::weight(key))};
-
-      for (auto& [x, y] : points) {
-        diff.data()[y * image1.width() + x] = value;
-      }
-    }
-  }
-
-  // fgm::fragment<16> frag{image1.dimensions()};
-
-  // frag.blit({0, 0}, image1, image1, 0);
-  // frag.blit(*offset, image2, image1, 1);
-
-  // auto merged{frag.blend().image_};
-
-  auto rgb_o1 = image1.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_o2 = image2.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_m1 = median1.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_m2 = median2.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_d = diff.map([](auto c) noexcept { return native_to_blend(c); });
-  auto rgb_c =
-      recovered.map([](auto c) noexcept { return native_to_blend(c); });
-
-  // auto rgb_g = merged.map([](auto c) noexcept { return native_to_blend(c);
-  // });
-
-  write_rgb("original1.png", rgb_o1);
-  write_rgb("original2.png", rgb_o2);
-  write_rgb("median1.png", rgb_m1);
-  write_rgb("median2.png", rgb_m2);
-  write_rgb("diff.png", rgb_d);
-  write_rgb("contours.png", rgb_c);
-
-  // write_rgb("motion_h.png", rgb_mh);
-  // write_rgb("motion_v.png", rgb_mv);
-
-  // write_rgb("merged.png", rgb_g);
-
-  // std::optional<aws::window_info> active{
-  //    std::in_place,
-  //    mrl::region_t{31, 55, 334, 207},
-  //    mrl::dimensions_t{screen_width, screen_height}};
-  // auto active_dim{active->bounds().dimensions()};
-
-  auto active{aws::scan(file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq"},
-                        {screen_width, screen_height})};
-
-  if (!active) {
-    return 0;
-  }
-
-  auto active_dim{active->bounds().dimensions()};
-
-  frc::collector collector{active_dim};
-  collector.collect(
-      file_feed<frc::collector::image_type>{ddir / "seq", active->margins()},
-      [](auto& img) { return nic::compress(img); });
-
-  auto fragments{collector.complete()};
-
-  // write_fragments(ddir / "fgm", fragments.begin(), fragments.end());
-  // auto fragments1{read_fragments(ddir / "fgm")};
-
-  auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
-                                                        fragments.end())};
-
-  auto smap{spliced.front().blend().image_};
-  auto rgb_smp = smap.map([](auto c) noexcept { return native_to_blend(c); });
-  write_rgb("smap.png", rgb_smp);
-
-  auto filtered{
-      fdf::filter(spliced, active_dim, [](auto const& img, auto const& dim) {
-        return nic::decompress(img, dim);
-      })};
-
-  // write_fragments(ddir / "filt", filtered.begin(), filtered.end());
-  // auto fragments3{read_fragments(ddir / "filt")};
-
-  auto master{std::max_element(
-      filtered.begin(), filtered.end(), [](auto& lhs, auto& rhs) {
-        return lhs.dots().size() < rhs.dots().size();
-      })};
-
-  auto fmap{master->blend().image_};
-  auto rgb_fmp = fmap.map([](auto c) noexcept { return native_to_blend(c); });
-
-  write_rgb("fmap.png", rgb_fmp);
-
-  auto art1{arf::filter(*master, 2.0f, arf::filter_size<15>{})};
-
-  auto rgb_art1 = art1.map([](auto c) noexcept { return native_to_blend(c); });
-
-  write_rgb("art1.png", rgb_art1);
-
-  // auto filtered2{fdf::filter(
-  //    std::vector<fgm::fragment<16>>{*master},
-  //    std::vector<fdf::background>{{master->zero(), std::move(art1)}},
-  //    file_feed<mrl::matrix<cpl::nat_cc>>{ddir / "seq", active->margins()})};
-
-  // auto rgb_fmp2 = filtered2.front().blend().image_.map(
-  //    [](auto c) noexcept { return native_to_blend(c); });
-  // write_rgb("fmap2.png", rgb_fmp2);
-
-  // auto art2{arf::filter(filtered2.front(), 2.0f, arf::filter_size<15>{})};
-
-  // auto rgb_art2 = art2.map([](auto c) noexcept { return native_to_blend(c);
-  // });
-
-  // write_rgb("art2.png", rgb_art2);
+  std::filesystem::path const ddir{"../../../data/"};
 
   mpb::builder builder{build_adapter{ddir / "seq"}};
-
   auto result{builder.build()};
 
   return 0;

@@ -93,8 +93,7 @@ template<typename Feeder>
 [[nodiscard]] std::optional<window_info>
     scan(Feeder&& feed, mrl::dimensions_t const& dimensions) requires(
         ifd::feeder<std::decay_t<Feeder>>) {
-  cte::extractor<cpl::mon_bv> extractor{dimensions};
-  details::heatmap_t heatmap{dimensions, {1}};
+  using pixel_alloc_t = all::frame_allocator<cpl::nat_cc>;
 
   auto mask{[](auto px, auto idx) { return value(px) != 0xff; }};
 
@@ -104,10 +103,17 @@ template<typename Feeder>
     auto const min_height{2 * dimensions.height_ / 5};
     auto const min_width{2 * dimensions.width_ / 3};
 
-    auto [pno, pimage]{feed.produce()};
+    all::memory_pool ppool{0};
+
+    cte::extractor<cpl::mon_bv> extractor{dimensions};
+    details::heatmap_t heatmap{dimensions, {1}};
+
+    auto [pno, pimage]{feed.produce(pixel_alloc_t{ppool})};
     for (std::size_t area{}, stagnation{};
          feed.has_more() && stagnation <= 100;) {
-      auto [cno, cimage]{feed.produce()};
+      all::memory_pool cpool{ppool.total_used() << 1};
+
+      auto [cno, cimage]{feed.produce(pixel_alloc_t{cpool})};
 
       details::compare(pimage, cimage, heatmap);
       if (auto contour{details::get_best(extractor.extract(heatmap, mask))};
@@ -129,6 +135,7 @@ template<typename Feeder>
       }
 
       pimage = std::move(cimage);
+      ppool = std::move(cpool);
     }
   }
 

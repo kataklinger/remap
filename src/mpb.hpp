@@ -1,8 +1,11 @@
 
 // map building
 
+#include "arf.hpp"
 #include "aws.hpp"
 #include "fdf.hpp"
+#include "fgs.hpp"
+#include "frc.hpp"
 
 namespace mpb {
 
@@ -17,8 +20,8 @@ public:
   }
 
   [[nodiscard]] std::vector<mrl::matrix<cpl::nat_cc>> build() {
-    auto window{aws::scan(adapter_.template begin_feed<mrl::matrix<cpl::nat_cc>>(),
-                          adapter_.get_screen_size())};
+    auto window{
+        aws::scan(adapter_.get_feed(), adapter_.get_screen_dimensions())};
     if (!window) {
       return {};
     }
@@ -26,9 +29,8 @@ public:
     auto window_dim{window->bounds().dimensions()};
 
     frc::collector collector{window_dim};
-    collector.collect(
-        adapter_.template begin_feed<frc::collector::image_type>(window->margins()),
-        [this](auto& img) { return adapter_.compress(img); });
+    collector.collect(adapter_.get_feed(window->margins()),
+                      [this](auto& img) { return adapter_.compress(img); });
 
     auto fragments{collector.complete()};
 

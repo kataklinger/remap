@@ -45,16 +45,16 @@ public:
 
 private:
   using path_node = pixel_type const*;
-  using path_containter =
-      std::deque<path_node, all::rebind_alloc_t<allocator_type, path_node>>;
-  using path_type = std::queue<path_node, path_containter>;
+  using path_type = std::queue<
+      path_node,
+      std::deque<path_node, all::rebind_alloc_t<allocator_type, path_node>>>;
 
 public:
   explicit inline extractor(mrl::dimensions_t dimensions,
-                            allocator_type const& allocator = allocator_type{})
-      : allocator_{allocator}
+                            allocator_type const& alloc = allocator_type{})
+      : allocator_{alloc}
       , outline_{dimensions}
-      , path_{path_containter{allocator}} {
+      , path_{} {
   }
 
 public:

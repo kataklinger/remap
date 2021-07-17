@@ -51,6 +51,8 @@ private:
       kpr::grid<grid_horizontal, grid_vertical, allocator_t<char>>;
   using keypoint_extractor_t = kpe::extractor<grid_type, grid_overlap>;
 
+  using pixel_alloc_t = allocator_t<cpl::nat_cc>;
+
 public:
   collector(mrl::dimensions_t dimensions)
       : extractor_{dimensions} {
@@ -62,10 +64,10 @@ public:
     if (feed.has_more()) {
       all::memory_pool ppool{0};
 
-      auto pkeys{process_init(feed, comp, allocator_t<char>{ppool})};
+      auto pkeys{process_init(feed, comp, pixel_alloc_t{ppool})};
       for (std::int32_t x{0}, y{0}; feed.has_more();) {
         all::memory_pool cpool{ppool.total_used() << 1};
-        pkeys = process_frame(feed, comp, pkeys, allocator_t<char>{cpool});
+        pkeys = process_frame(feed, comp, pkeys, pixel_alloc_t{cpool});
         ppool = std::move(cpool);
       }
     }
@@ -81,7 +83,7 @@ public:
 
 private:
   template<typename Feed, typename Comp>
-  auto process_init(Feed& feed, Comp& comp, allocator_t<char> const& alloc) {
+  auto process_init(Feed& feed, Comp& comp, pixel_alloc_t const& alloc) {
     auto [no, image]{feed.produce(alloc)};
 
     add_fragment(image.dimensions());
@@ -98,7 +100,7 @@ private:
   auto process_frame(Feed& feed,
                      Comp& comp,
                      grid_type const& previous,
-                     allocator_t<char> const& alloc) {
+                     pixel_alloc_t const& alloc) {
     auto [no, image]{feed.produce(alloc)};
 
     image_type median{image.dimensions(), alloc};
