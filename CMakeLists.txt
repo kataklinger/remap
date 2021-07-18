@@ -24,10 +24,11 @@ add_executable (remap
 	"src/aws.hpp"
 	"src/fdf.hpp"
 	"src/arf.hpp"
+	"src/icd.hpp"
 	"src/nic.hpp"
 	"src/mpb.hpp"
 	"src/pngu.hpp"
-	"src/main.cpp")
+	"src/main.cpp" "src/sid.hpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)

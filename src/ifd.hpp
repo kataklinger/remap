@@ -1,5 +1,10 @@
 
+// image feed definition
+
 #pragma once
+
+#include <concepts>
+#include <cstddef>
 
 namespace ifd {
 

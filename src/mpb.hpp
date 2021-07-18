@@ -1,6 +1,8 @@
 
 // map building
 
+#pragma once
+
 #include "arf.hpp"
 #include "aws.hpp"
 #include "fdf.hpp"

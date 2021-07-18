@@ -5,6 +5,7 @@
 
 #include "fde.hpp"
 #include "fgm.hpp"
+#include "icd.hpp"
 
 #include <execution>
 #include <iterator>
@@ -37,11 +38,12 @@ namespace details {
 } // namespace details
 
 template<typename Comp, std::uint8_t Depth>
-[[nodiscard]] std::vector<fgm::fragment<Depth>>
-    filter(std::vector<fgm::fragment<Depth>> const& fragments,
-           std::vector<background> const& backgrounds,
-           mrl::dimensions_t const& frame_dim,
-           Comp&& comp) {
+[[nodiscard]] std::vector<fgm::fragment<Depth>> filter(
+    std::vector<fgm::fragment<Depth>> const& fragments,
+    std::vector<background> const& backgrounds,
+    mrl::dimensions_t const& frame_dim,
+    Comp&& comp) requires(icd::decompressor<std::decay_t<Comp>,
+                                            std::allocator<cpl::nat_cc>>) {
   std::vector<fgm::fragment<Depth>> results{};
 
   for (std::size_t i{0}, l{fragments.size()}; i < l; ++i) {

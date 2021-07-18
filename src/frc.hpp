@@ -5,10 +5,10 @@
 
 #include "all.hpp"
 #include "fgm.hpp"
+#include "icd.hpp"
 #include "ifd.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
-#include "kpr.hpp"
 
 #include <execution>
 #include <list>
@@ -59,8 +59,9 @@ public:
   }
 
   template<typename Feeder, typename Comp>
-  void collect(Feeder&& feed,
-               Comp&& comp) requires(ifd::feeder<std::decay_t<Feeder>>) {
+  void collect(Feeder&& feed, Comp&& comp) requires(
+      ifd::feeder<std::decay_t<Feeder>>&&
+          icd::compressor<std::decay_t<Comp>, pixel_alloc_t>) {
     if (feed.has_more()) {
       all::memory_pool ppool{0};
 
