@@ -58,7 +58,7 @@ public:
 
   template<typename Feeder, typename Comp>
   void collect(Feeder&& feed, Comp&& comp) requires(
-      ifd::feeder<std::decay_t<Feeder>>&&
+      ifd::feeder<std::decay_t<Feeder>, pixel_alloc_t>&&
           icd::compressor<std::decay_t<Comp>, pixel_alloc_t>) {
     if (feed.has_more()) {
       all::memory_pool ppool{0};

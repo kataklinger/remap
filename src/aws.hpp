@@ -88,7 +88,7 @@ private:
 template<typename Feeder>
 [[nodiscard]] std::optional<window_info>
     scan(Feeder&& feed, mrl::dimensions_t const& dimensions) requires(
-        ifd::feeder<std::decay_t<Feeder>>) {
+        ifd::feeder<std::decay_t<Feeder>, all::frame_allocator<cpl::nat_cc>>) {
   using pixel_alloc_t = all::frame_allocator<cpl::nat_cc>;
 
   auto mask{[](auto px, auto idx) { return value(px) != 0xff; }};

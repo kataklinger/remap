@@ -3,8 +3,11 @@
 
 #pragma once
 
+#include "sid.hpp"
+
 #include <concepts>
 #include <cstddef>
+#include <utility>
 
 namespace ifd {
 
@@ -14,9 +17,13 @@ struct frame {
   Image image_;
 };
 
-template<typename Ty>
+template<typename Ty, typename Alloc>
 concept feeder = requires(Ty a) {
   { a.has_more() }
   noexcept->std::same_as<bool>;
+
+  {
+    a.produce(std::declval<Alloc&&>())
+    } -> std::same_as<frame<sid::nat::aimg_t<Alloc>>>;
 };
 } // namespace ifd
