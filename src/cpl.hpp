@@ -57,6 +57,22 @@ using grs_iv = color_t<float, grs_intensity_value_t>;
 
 using mon_bv = color_t<std::uint8_t, mon_bit_value_t>;
 
+inline constexpr nat_cc operator"" _cc(unsigned long long arg) noexcept {
+  return {static_cast<unsigned char>(arg)};
+}
+
+inline constexpr nat_ov operator"" _ov(unsigned long long arg) noexcept {
+  return {static_cast<unsigned char>(arg)};
+}
+
+inline constexpr mon_bv operator"" _bv(unsigned long long arg) noexcept {
+  return {static_cast<unsigned char>(arg)};
+}
+
+inline constexpr grs_iv operator"" _iv(long double arg) noexcept {
+  return {static_cast<float>(arg)};
+}
+
 inline constexpr rgb_bc native_to_blend_map[] = {{0x00000000},
                                                  {0x00FFFFFF},
                                                  {0x0068372B},

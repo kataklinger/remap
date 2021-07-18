@@ -161,7 +161,7 @@ namespace details {
 
       for (auto current{col}, last{current + stride}; current < last;
            current += instep) {
-        for (; current < last && !fragment.mask_[current - first];
+        for (; current < last && !value(fragment.mask_[current - first]);
              current += instep) {
           buffer.reset();
         }

@@ -17,7 +17,7 @@ namespace details {
   template<std::uint8_t Depth>
   struct snippet {
     fgm::fragment<Depth> fragment_{};
-    mrl::matrix<std::uint8_t> mask_;
+    sid::mon::dimg_t mask_;
 
     grid_t grid_;
   };

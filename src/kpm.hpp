@@ -196,7 +196,7 @@ namespace details {
   template<typename Region>
   [[nodiscard]] intersect_data
       filter_keypoints(Region const& region,
-                       mrl::matrix<std::uint8_t> const& mask,
+                       sid::mon::dimg_t const& mask,
                        cdt::offset_t delta,
                        mrl::region_t limits) noexcept {
     std::size_t count{};
@@ -206,7 +206,7 @@ namespace details {
         if (limits.contains(point)) {
           if (auto idx{to_index(static_cast<cdt::offset_t>(point) + delta,
                                 mask.dimensions())};
-              mask.data()[idx] != 0) {
+              value(mask.data()[idx]) != 0) {
             ++count;
           }
         }
@@ -277,9 +277,9 @@ template<match_config Cfg, typename Region>
 [[nodiscard]] inline ticket_t<Cfg>
     match(Cfg const& config,
           Region const& preg,
-          mrl::matrix<std::uint8_t> const& pmask,
+          sid::mon::dimg_t const& pmask,
           Region const& creg,
-          mrl::matrix<std::uint8_t> const& cmask) {
+                                         sid::mon::dimg_t const& cmask) {
   using namespace details;
 
   auto ticket{cast_vote(config, preg, creg)};

@@ -15,7 +15,7 @@ using point_t = cdt::point<std::int32_t>;
 
 struct fragment_blend {
   sid::nat::dimg_t image_;
-  mrl::matrix<std::uint8_t> mask_;
+  sid::mon::dimg_t mask_;
 };
 
 struct packed_data {
@@ -109,8 +109,10 @@ public:
   }
 
   [[nodiscard]] fragment_blend blend() const {
+    using namespace cpl;
+
     sid::nat::dimg_t image{dots_.dimensions()};
-    mrl::matrix<std::uint8_t> mask{dots_.dimensions()};
+    sid::mon::dimg_t mask{dots_.dimensions()};
 
     auto img_out{image.data()};
     auto mask_out{mask.data()};
@@ -121,7 +123,7 @@ public:
       auto selected{std::max_element(dot, dot + depth)};
       if (*selected != 0) {
         *img_out = {static_cast<cpl::nat_cc::value_type>(selected - dot)};
-        *mask_out = *selected != 0 ? 1 : 0;
+        *mask_out = *selected != 0 ? 1_bv : 0_bv;
       }
     }
 
