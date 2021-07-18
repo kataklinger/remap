@@ -17,9 +17,11 @@ namespace details {
   template<typename TAlign>
   void generate_mask(sid::nat::dimg_t const& background,
                      sid::nat::dimg_t const& frame,
-                     mrl::matrix<std::uint8_t>& output,
+                     sid::mon::dimg_t& output,
                      std::size_t idx,
                      TAlign /*unused*/) noexcept {
+    using namespace cpl;
+
     auto &bdim{background.dimensions()}, &fdim{frame.dimensions()};
     auto vec_size{fdim.width_ - fdim.width_ % mm_size};
 
@@ -45,7 +47,7 @@ namespace details {
       }
 
       for (auto bend{brow + fdim.width_}; bcur < bend; ++bcur, ++fcur, ++out) {
-        *out = *bcur == *fcur ? 0xff : 0;
+        *out = *bcur == *fcur ? 0xff_bv : 0_bv;
       }
     }
   }
@@ -82,8 +84,10 @@ public:
                                  fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
 
-    auto forground{contours_.extract(
-        median, [m = mask_.data()](auto px, auto idx) { return m[idx] == 0; })};
+    auto forground{
+        contours_.extract(median, [m = mask_.data()](auto px, auto idx) {
+          return value(m[idx]) == 0;
+        })};
 
     auto area_limit{frame.dimensions().area() / 5};
 
@@ -110,7 +114,7 @@ private:
 private:
   contour_extractor_t contours_;
   sid::nat::dimg_t const* background_;
-  mrl::matrix<std::uint8_t> mask_;
+  sid::mon::dimg_t mask_;
 };
 
 template<typename Contour, typename Alloc>
