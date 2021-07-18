@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include "cpl.hpp"
-#include "mrl.hpp"
+#include "icd.hpp"
 
 #include <algorithm>
 
@@ -20,8 +19,8 @@ struct fragment_blend {
 };
 
 struct packed_data {
-  std::vector<std::uint8_t> image_;
-  std::vector<std::uint8_t> median_;
+  icd::compressed_t image_;
+  icd::compressed_t median_;
 };
 
 struct frame {

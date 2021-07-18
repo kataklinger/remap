@@ -66,13 +66,13 @@ private:
 class native_compression {
 public:
   template<typename Alloc>
-  [[nodiscard]] std::vector<std::uint8_t>
+  [[nodiscard]] icd::compressed_t
       operator()(mrl::matrix<cpl::nat_cc, Alloc> const& image) const {
     return nic::compress(image);
   }
 
   [[nodiscard]] mrl::matrix<cpl::nat_cc>
-      operator()(std::vector<std::uint8_t> const& compressed,
+      operator()(icd::compressed_t const& compressed,
                  mrl::dimensions_t const& dim) const {
     return nic::decompress(compressed, dim);
   }

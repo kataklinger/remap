@@ -1,15 +1,14 @@
 
 // native image compression
 
-#include "cpl.hpp"
-#include "mrl.hpp"
+#include "icd.hpp"
 
 namespace nic {
 
 template<typename Alloc>
-[[nodiscard]] std::vector<std::uint8_t>
+[[nodiscard]] icd::compressed_t
     compress(mrl::matrix<cpl::nat_cc, Alloc> const& image) {
-  std::vector<std::uint8_t> result{};
+  icd::compressed_t result{};
 
   std::vector<std::uint8_t> buffer{};
 
@@ -106,10 +105,8 @@ template<typename Alloc>
   return result;
 }
 
-template<typename Alloc>
 [[nodiscard]] mrl::matrix<cpl::nat_cc>
-    decompress(std::vector<std::uint8_t, Alloc> const& pack,
-               mrl::dimensions_t const& dim) {
+    decompress(icd::compressed_t const& pack, mrl::dimensions_t const& dim) {
   mrl::matrix<cpl::nat_cc> result{dim};
 
   auto out{result.data()};
