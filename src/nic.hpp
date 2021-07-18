@@ -7,7 +7,7 @@ namespace nic {
 
 template<typename Alloc>
 [[nodiscard]] icd::compressed_t
-    compress(mrl::matrix<cpl::nat_cc, Alloc> const& image) {
+    compress(sid::nat::aimg_t<Alloc> const& image) {
   icd::compressed_t result{};
 
   std::vector<std::uint8_t> buffer{};
@@ -105,9 +105,9 @@ template<typename Alloc>
   return result;
 }
 
-[[nodiscard]] mrl::matrix<cpl::nat_cc>
+[[nodiscard]] sid::nat::dimg_t
     decompress(icd::compressed_t const& pack, mrl::dimensions_t const& dim) {
-  mrl::matrix<cpl::nat_cc> result{dim};
+  sid::nat::dimg_t result{dim};
 
   auto out{result.data()};
 

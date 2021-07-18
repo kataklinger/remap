@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include "cpl.hpp"
 #include "cte.hpp"
 #include "fgm.hpp"
-
 #include "kpe.hpp"
 
 #include <intrin.h>
@@ -17,8 +15,8 @@ namespace details {
   constexpr inline auto mm_size{sizeof(mm_type)};
 
   template<typename TAlign>
-  void generate_mask(mrl::matrix<cpl::nat_cc> const& background,
-                     mrl::matrix<cpl::nat_cc> const& frame,
+  void generate_mask(sid::nat::dimg_t const& background,
+                     sid::nat::dimg_t const& frame,
                      mrl::matrix<std::uint8_t>& output,
                      std::size_t idx,
                      TAlign /*unused*/) noexcept {
@@ -71,7 +69,7 @@ public:
   using contours = typename contour_extractor_t::contours;
 
 public:
-  extractor(mrl::matrix<cpl::nat_cc> const& background,
+  extractor(sid::nat::dimg_t const& background,
             mrl::dimensions_t dimensions,
             allocator_type const& allocator = allocator_type{})
       : background_{&background}
@@ -79,8 +77,8 @@ public:
       , mask_{dimensions} {
   }
 
-  [[nodiscard]] contours extract(mrl::matrix<cpl::nat_cc> const& frame,
-                                 mrl::matrix<cpl::nat_cc> const& median,
+  [[nodiscard]] contours extract(sid::nat::dimg_t const& frame,
+                                 sid::nat::dimg_t const& median,
                                  fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
 
@@ -99,8 +97,7 @@ public:
   }
 
 private:
-  void generate_mask(mrl::matrix<cpl::nat_cc> const& frame,
-                     std::size_t idx) noexcept {
+  void generate_mask(sid::nat::dimg_t const& frame, std::size_t idx) noexcept {
     if (idx % details::mm_size == 0) {
       details::generate_mask(*background_, frame, mask_, idx, std::true_type{});
     }
@@ -112,7 +109,7 @@ private:
 
 private:
   contour_extractor_t contours_;
-  mrl::matrix<cpl::nat_cc> const* background_;
+  sid::nat::dimg_t const* background_;
   mrl::matrix<std::uint8_t> mask_;
 };
 
@@ -121,7 +118,7 @@ template<typename Contour, typename Alloc>
                         mrl::dimensions_t const& dim) {
   using alloc_t = all::rebind_alloc_t<Alloc, cpl::mon_bv>;
 
-  mrl::matrix<cpl::mon_bv, alloc_t> result{dim, forground.get_allocator()};
+  sid::mon::aimg_t<alloc_t> result{dim, forground.get_allocator()};
 
   auto output{result.data()};
   for (auto& contour : forground) {

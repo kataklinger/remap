@@ -14,7 +14,7 @@ using dot_t = std::array<std::uint16_t, Depth>;
 using point_t = cdt::point<std::int32_t>;
 
 struct fragment_blend {
-  mrl::matrix<cpl::nat_cc> image_;
+  sid::nat::dimg_t image_;
   mrl::matrix<std::uint8_t> mask_;
 };
 
@@ -68,8 +68,8 @@ public:
 
   template<typename Alloc1, typename Alloc2>
   void blit(point_t pos,
-            mrl::matrix<cpl::nat_cc, Alloc1> const& image,
-            mrl::matrix<cpl::mon_bv, Alloc2> const& mask,
+            sid::nat::aimg_t<Alloc1> const& image,
+            sid::mon::aimg_t<Alloc2> const& mask,
             std::size_t frame_no) {
     blit_impl(pos, image, [m = mask.data()](auto dst, auto src) mutable {
       if (value(*(m++)) == 0) {
@@ -82,7 +82,7 @@ public:
 
   template<typename Alloc>
   void blit(point_t pos,
-            mrl::matrix<cpl::nat_cc, Alloc> const& image,
+            sid::nat::aimg_t<Alloc> const& image,
             packed_data&& packed,
             std::size_t frame_no) {
     ensure(pos, image.dimensions());
@@ -109,7 +109,7 @@ public:
   }
 
   [[nodiscard]] fragment_blend blend() const {
-    mrl::matrix<cpl::nat_cc> image{dots_.dimensions()};
+    sid::nat::dimg_t image{dots_.dimensions()};
     mrl::matrix<std::uint8_t> mask{dots_.dimensions()};
 
     auto img_out{image.data()};

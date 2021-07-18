@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include "all.hpp"
 #include "fgm.hpp"
-#include "icd.hpp"
 #include "ifd.hpp"
 #include "kpe.hpp"
 #include "kpm.hpp"
@@ -21,7 +19,7 @@ public:
   template<typename Ty>
   using allocator_t = all::frame_allocator<Ty>;
 
-  using image_type = mrl::matrix<cpl::nat_cc, allocator_t<cpl::nat_cc>>;
+  using image_type = sid::nat::aimg_t<allocator_t<cpl::nat_cc>>;
 
   using fragment_t = fgm::fragment<color_depth>;
   using fragment_list = std::list<fragment_t>;

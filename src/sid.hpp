@@ -8,9 +8,16 @@
 
 namespace sid {
 namespace nat {
-  using img_t = mrl::matrix<cpl::nat_cc>;
+  using dimg_t = mrl::matrix<cpl::nat_cc>;
 
   template<typename Alloc>
-  using imgal_t = mrl::matrix<cpl::nat_cc, Alloc>;
+  using aimg_t = mrl::matrix<cpl::nat_cc, Alloc>;
 } // namespace nat
+
+namespace mon {
+  using dimg_t = mrl::matrix<cpl::mon_bv>;
+
+  template<typename Alloc>
+  using aimg_t = mrl::matrix<cpl::mon_bv, Alloc>;
+}
 } // namespace sid

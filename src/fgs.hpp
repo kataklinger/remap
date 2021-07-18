@@ -26,7 +26,7 @@ namespace details {
   [[nodiscard]] snippet<Depth> extract_single(fgm::fragment<Depth>&& fragment) {
     auto [image, mask]{fragment.blend()};
 
-    mrl::matrix<cpl::nat_cc> median{image.dimensions(), image.get_allocator()};
+    sid::nat::dimg_t median{image.dimensions(), image.get_allocator()};
 
     kpe::extractor<grid_t, 0> extractor{image.dimensions()};
     return {std::move(fragment),

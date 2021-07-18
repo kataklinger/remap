@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <intrin.h>
-
-#include "cpl.hpp"
+#include "all.hpp"
 #include "kpr.hpp"
-#include "mrl.hpp"
+#include "sid.hpp"
+
+#include <intrin.h>
 
 namespace kpe {
 using ksize_t = std::uint8_t;
@@ -70,8 +70,7 @@ class extractor {
 public:
   using grid_type = Grid;
 
-  using matrix_type = mrl::matrix<
-      cpl::nat_cc,
+  using matrix_type = sid::nat::aimg_t<
       all::rebind_alloc_t<typename grid_type::allocator_type, cpl::nat_cc>>;
 
 private:

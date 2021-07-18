@@ -5,9 +5,8 @@
 
 #include <intrin.h>
 
-#include "cpl.hpp"
 #include "kpr.hpp"
-#include "mrl.hpp"
+#include "sid.hpp"
 
 namespace kpe {
 namespace v2 {
@@ -40,8 +39,7 @@ namespace v2 {
       unit_[15] = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
     }
 
-    void extract(mrl::matrix<cpl::nat_cc> const& image,
-                 mrl::matrix<cpl::nat_cc>& median) {
+    void extract(sid::nat::dimg_t const& image, sid::nat::dimg_t& median) {
       grid_.clear();
 
       auto tmp = part_.data();
@@ -104,7 +102,7 @@ namespace v2 {
                               << (4 * (kernel_size - 1)));
     }
 
-    void col_sum(mrl::matrix<cpl::nat_cc> const& image) {
+    void col_sum(sid::nat::dimg_t const& image) {
       auto start{image.data() + image.width() * kernel_half};
       auto out{tote_.data() + (tote_.width() + 1) * kernel_half};
 

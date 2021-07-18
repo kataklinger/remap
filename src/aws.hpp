@@ -3,17 +3,14 @@
 
 #pragma once
 
-#include "cpl.hpp"
 #include "cte.hpp"
 #include "ifd.hpp"
-#include "mrl.hpp"
+#include "sid.hpp"
 
 #include <intrin.h>
 
 namespace aws {
 namespace details {
-  using heatmap_t = mrl::matrix<cpl::mon_bv>;
-
   template<typename Image>
   inline constexpr auto pixel_size_v{sizeof(typename Image::value_type)};
 
@@ -30,7 +27,7 @@ namespace details {
   template<typename Image>
   void compare(Image const& previous,
                Image const& current,
-               heatmap_t& output) noexcept {
+               sid::mon::dimg_t& output) noexcept {
     using mm_t = __m256i;
     constexpr auto step{step_size_v<mm_t, Image>};
 
@@ -106,7 +103,7 @@ template<typename Feeder>
 
     cte::extractor<cpl::mon_bv, pixel_alloc_t> extractor{dimensions,
                                                          pixel_alloc_t{ppool}};
-    details::heatmap_t heatmap{dimensions, {1}};
+    sid::mon::dimg_t heatmap{dimensions, {1}};
 
     auto [pno, pimage]{feed.produce(pixel_alloc_t{ppool})};
     for (std::size_t area{}, stagnation{};

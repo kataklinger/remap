@@ -33,7 +33,7 @@ public:
 
   template<typename Alloc>
   [[nodiscard]] auto produce(Alloc alloc) {
-    using image_type = mrl::matrix<cpl::nat_cc, Alloc>;
+    using image_type = sid::nat::aimg_t<Alloc>;
     using frame_type = ifd::frame<image_type>;
 
     image_type temp{dimensions_, alloc};
@@ -67,11 +67,11 @@ class native_compression {
 public:
   template<typename Alloc>
   [[nodiscard]] icd::compressed_t
-      operator()(mrl::matrix<cpl::nat_cc, Alloc> const& image) const {
+      operator()(sid::nat::aimg_t<Alloc> const& image) const {
     return nic::compress(image);
   }
 
-  [[nodiscard]] mrl::matrix<cpl::nat_cc>
+  [[nodiscard]] sid::nat::dimg_t
       operator()(icd::compressed_t const& compressed,
                  mrl::dimensions_t const& dim) const {
     return nic::decompress(compressed, dim);

@@ -5,7 +5,6 @@
 
 #include "fde.hpp"
 #include "fgm.hpp"
-#include "icd.hpp"
 
 #include <execution>
 #include <iterator>
@@ -14,7 +13,7 @@ namespace fdf {
 
 struct background {
   fgm::point_t zero_;
-  mrl::matrix<cpl::nat_cc> image_;
+  sid::nat::dimg_t image_;
 };
 
 namespace details {

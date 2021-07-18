@@ -21,7 +21,7 @@ public:
       : adapter_{adapter} {
   }
 
-  [[nodiscard]] std::vector<mrl::matrix<cpl::nat_cc>> build() {
+  [[nodiscard]] std::vector<sid::nat::dimg_t> build() {
     auto window{
         aws::scan(adapter_.get_feed(), adapter_.get_screen_dimensions())};
     if (!window) {
@@ -40,7 +40,7 @@ public:
                                                           fragments.end())};
     auto filtered{fdf::filter(spliced, window_dim, adapter_.get_compression())};
 
-    std::vector<mrl::matrix<cpl::nat_cc>> cleaned{filtered.size()};
+    std::vector<sid::nat::dimg_t> cleaned{filtered.size()};
     std::transform(
         std::execution::par,
         filtered.begin(),

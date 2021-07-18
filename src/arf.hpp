@@ -246,7 +246,7 @@ namespace details {
     return result;
   }
 
-  [[nodiscard]] mrl::matrix<cpl::nat_cc>
+  [[nodiscard]] sid::nat::dimg_t
       blur(fgm::fragment<16>::matrix_type const& dots,
            mrl::matrix<float> const& heatmap,
            float dev) {
@@ -263,7 +263,7 @@ namespace details {
     auto input{dots.data()};
     auto cond{heatmap.data()};
 
-    mrl::matrix<cpl::nat_cc> result{heatmap.dimensions()};
+    sid::nat::dimg_t result{heatmap.dimensions()};
     auto output{result.data()};
 
     for (auto outer{input + margin}, ocend{dots.end() - vstride - margin};
@@ -306,7 +306,7 @@ template<std::uint8_t Size>
 using filter_size = std::integral_constant<std::uint8_t, Size>;
 
 template<std::uint8_t Size>
-[[nodiscard]] mrl::matrix<cpl::nat_cc>
+[[nodiscard]] sid::nat::dimg_t
     filter(fgm::fragment<16> const& fragment,
            float dev,
            std::integral_constant<std::uint8_t, Size> /*unused*/) {
