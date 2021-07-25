@@ -143,11 +143,11 @@ namespace details {
   [[nodiscard]] auto build_deltas(std::vector<snippet<Depth>> const& snippets) {
     std::vector<details::delta> deltas;
 
-    auto segments{static_cast<std::int16_t>(snippets.size())};
-    deltas.reserve((segments * segments - segments) / 2);
+    auto segments{snippets.size()};
+    deltas.reserve(segments * (segments - 1) / 2);
 
     for (std::int16_t i{0}; i < segments; ++i) {
-      for (auto j{i + 1}; j < segments; ++j) {
+      for (std::int16_t j{i + 1}; j < segments; ++j) {
         deltas.emplace_back(couple_t{i, j});
       }
     }
@@ -175,11 +175,11 @@ namespace details {
 
   void crossmatch_single(delta& pi, delta& pj, delta& pk) noexcept {
     for (auto& [i, u1] : pi.raw()) {
-      auto [ix, iy]{i};
+      auto& [ix, iy]{i};
       for (auto& [j, u2] : pj.raw()) {
-        auto [jx, jy]{j};
+        auto& [jx, jy]{j};
         for (auto& [k, u3] : pk.raw()) {
-          auto [kx, ky]{k};
+          auto& [kx, ky]{k};
           if (ix == jx + kx && iy == jy + ky) {
             pi.crossmatch(i);
             pj.crossmatch(j);

@@ -78,6 +78,57 @@ public:
   }
 };
 
+struct aws_callback {
+  inline void operator()(aws::frame_type const& frame,
+                         aws::heatmap_type const& heatmap,
+                         aws::contour_type const& contour,
+                         std::size_t stagnation) const noexcept {
+  }
+};
+
+struct frc_callback {
+  inline void operator()(frc::fragment_t const& fragment,
+                         frc::frame_type const& frame_type,
+                         frc::image_type const& median,
+                         frc::grid_type const& grid) const noexcept {
+  }
+};
+
+struct fdf_callback {
+  inline void operator()(fdf::fragment_t const& fragment,
+                         std::size_t fragment_no,
+                         sid::nat::dimg_t const& image,
+                         std::size_t frame_no,
+                         sid::nat::dimg_t const& median,
+                         fgm::point_t const& pos,
+                         fdf::contours_t const& foreground,
+                         sid::mon::dimg_t const& mask) const noexcept {
+  }
+};
+
+class callbacks {
+public:
+  inline callbacks() {
+  }
+
+  [[nodiscard]] inline aws_callback& aws() noexcept {
+    return aws_;
+  }
+
+  [[nodiscard]] inline frc_callback& frc() noexcept {
+    return frc_;
+  }
+
+  [[nodiscard]] inline fdf_callback& fdf() noexcept {
+    return fdf_;
+  }
+
+private:
+  aws_callback aws_;
+  frc_callback frc_;
+  fdf_callback fdf_;
+};
+
 class build_adapter {
 public:
   static constexpr mrl::dimensions_t screen_dimensions{388, 312};
@@ -104,20 +155,27 @@ public:
     return file_feed{screen_dimensions, files_, crop};
   }
 
-  [[nodiscard]] native_compression get_compression() const {
+  [[nodiscard]] inline native_compression get_compression() const {
     return native_compression{};
   }
 
-  [[nodiscard]] mrl::dimensions_t get_screen_dimensions() const noexcept {
+  [[nodiscard]] inline mrl::dimensions_t
+      get_screen_dimensions() const noexcept {
     return screen_dimensions;
   }
 
-  [[nodiscard]] float get_artifact_filter_dev() const noexcept {
+  [[nodiscard]] inline float get_artifact_filter_dev() const noexcept {
     return artifact_filter_dev;
+  }
+
+  [[nodiscard]] inline callbacks& get_callbacks() noexcept {
+    return callbacks_;
   }
 
 private:
   file_list files_;
+
+  callbacks callbacks_;
 };
 
 int main() {

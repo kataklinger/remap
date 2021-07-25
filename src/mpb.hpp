@@ -22,23 +22,39 @@ public:
   }
 
   [[nodiscard]] std::vector<sid::nat::dimg_t> build() {
-    auto window{
-        aws::scan(adapter_.get_feed(), adapter_.get_screen_dimensions())};
+    auto& aws_cb{adapter_.get_callbacks().aws()};
+
+    auto window{aws::scan(
+        adapter_.get_feed(), adapter_.get_screen_dimensions(), aws_cb)};
+
+    // aws_cb(window);
+
     if (!window) {
       return {};
     }
 
     auto window_dim{window->bounds().dimensions()};
 
+    auto& frc_cb{adapter_.get_callbacks().frc()};
+
     frc::collector collector{window_dim};
     collector.collect(adapter_.get_feed(window->margins()),
-                      adapter_.get_compression());
+                      adapter_.get_compression(),
+                      frc_cb);
 
     auto fragments{collector.complete()};
 
-    auto spliced{fgs::splice<frc::collector::color_depth>(fragments.begin(),
-                                                          fragments.end())};
-    auto filtered{fdf::filter(spliced, window_dim, adapter_.get_compression())};
+    // frc_cb(fragments);
+
+    auto spliced{
+        fgs::splice<frc::color_depth>(fragments.begin(), fragments.end())};
+
+    auto& fdf_cb{adapter_.get_callbacks().fdf()};
+
+    auto filtered{
+        fdf::filter(spliced, window_dim, adapter_.get_compression(), fdf_cb)};
+
+    // fdf_cb(filtered);
 
     std::vector<sid::nat::dimg_t> cleaned{filtered.size()};
     std::transform(

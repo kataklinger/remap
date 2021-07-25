@@ -10,7 +10,9 @@
 #include <intrin.h>
 
 namespace fde {
+
 namespace details {
+
   using mm_type = __m256i;
   constexpr inline auto mm_size{sizeof(mm_type)};
 
@@ -52,7 +54,14 @@ namespace details {
     }
   }
 
+  template<typename Alloc>
+  using extractor_t =
+      cte::extractor<cpl::nat_cc, all::rebind_alloc_t<Alloc, ctr::edge>>;
+
 } // namespace details
+
+template<typename Alloc>
+using contours_t = typename details::extractor_t<Alloc>::contours;
 
 template<typename Alloc>
 class extractor {
@@ -61,14 +70,6 @@ public:
 
   using forground_t =
       std::vector<all::rebind_alloc_t<allocator_type, ctr::edge>>;
-
-private:
-  using contour_extractor_t =
-      cte::extractor<cpl::nat_cc,
-                     all::rebind_alloc_t<allocator_type, ctr::edge>>;
-
-public:
-  using contours = typename contour_extractor_t::contours;
 
 public:
   extractor(sid::nat::dimg_t const& background,
@@ -79,9 +80,10 @@ public:
       , mask_{dimensions} {
   }
 
-  [[nodiscard]] contours extract(sid::nat::dimg_t const& frame,
-                                 sid::nat::dimg_t const& median,
-                                 fgm::point_t position) {
+  [[nodiscard]] contours_t<allocator_type>
+      extract(sid::nat::dimg_t const& frame,
+              sid::nat::dimg_t const& median,
+              fgm::point_t position) {
     generate_mask(frame, cdt::to_index(position, background_->dimensions()));
 
     auto forground{
@@ -112,7 +114,7 @@ private:
   }
 
 private:
-  contour_extractor_t contours_;
+  details::extractor_t<allocator_type> contours_;
   sid::nat::dimg_t const* background_;
   sid::mon::dimg_t mask_;
 };

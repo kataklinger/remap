@@ -16,11 +16,12 @@ struct background {
   sid::nat::dimg_t image_;
 };
 
+using fragment_t = fgm::fragment<16>;
+
 namespace details {
 
-  template<std::uint8_t Depth>
   [[nodiscard]] std::vector<background>
-      get_background(std::vector<fgm::fragment<Depth>> const& fragments) {
+      get_background(std::vector<fragment_t> const& fragments) {
     std::vector<background> results{fragments.size()};
     std::transform(std::execution::par,
                    fragments.begin(),
@@ -36,14 +37,17 @@ namespace details {
 
 } // namespace details
 
-template<typename Comp, std::uint8_t Depth>
-[[nodiscard]] std::vector<fgm::fragment<Depth>> filter(
-    std::vector<fgm::fragment<Depth>> const& fragments,
+using contours_t = fde::contours_t<std::allocator<cpl::nat_cc>>;
+
+template<typename Comp, typename Callback>
+[[nodiscard]] std::vector<fragment_t> filter(
+    std::vector<fragment_t> const& fragments,
     std::vector<background> const& backgrounds,
     mrl::dimensions_t const& frame_dim,
-    Comp&& comp) requires(icd::decompressor<std::decay_t<Comp>,
-                                            std::allocator<cpl::nat_cc>>) {
-  std::vector<fgm::fragment<Depth>> results{};
+    Comp&& comp,
+    Callback&& cb) requires(icd::decompressor<std::decay_t<Comp>,
+                                              std::allocator<cpl::nat_cc>>) {
+  std::vector<fragment_t> results{};
 
   for (std::size_t i{0}, l{fragments.size()}; i < l; ++i) {
     auto& fragment = fragments[i];
@@ -62,21 +66,26 @@ template<typename Comp, std::uint8_t Depth>
       auto foreground{extractor.extract(image, median, pos - result.zero())};
       auto mask{fde::mask(foreground, image.dimensions())};
       result.blit(pos, image, mask, no);
+
+      cb(result, i, image, no, median, pos, foreground, mask);
     }
   }
 
   return results;
 }
 
-template<typename Comp, std::uint8_t Depth>
-[[nodiscard]] inline std::vector<fgm::fragment<Depth>>
-    filter(std::vector<fgm::fragment<Depth>> const& fragments,
-           mrl::dimensions_t const& frame_dim,
-           Comp&& comp) {
+template<typename Comp, typename Callback>
+[[nodiscard]] inline std::vector<fragment_t> filter(
+    std::vector<fragment_t> const& fragments,
+    mrl::dimensions_t const& frame_dim,
+    Comp&& comp,
+    Callback&& cb) requires(icd::decompressor<std::decay_t<Comp>,
+                                              std::allocator<cpl::nat_cc>>) {
   return filter(fragments,
                 details::get_background(fragments),
                 frame_dim,
-                std::forward<Comp>(comp));
+                std::forward<Comp>(comp),
+                std::forward<Callback>(cb));
 }
 
 } // namespace fdf

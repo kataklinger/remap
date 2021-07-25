@@ -12,23 +12,26 @@
 #include <list>
 
 namespace frc {
+
+template<typename Ty>
+using allocator_t = all::frame_allocator<Ty>;
+
+using image_type = sid::nat::aimg_t<allocator_t<cpl::nat_cc>>;
+using frame_type = ifd::frame<image_type>;
+
+static inline constexpr std::uint8_t color_depth{16};
+
+using fragment_t = fgm::fragment<color_depth>;
+using fragment_list = std::list<fragment_t>;
+
+static inline constexpr std::size_t grid_horizontal{4};
+static inline constexpr std::size_t grid_vertical{2};
+static inline constexpr std::size_t grid_overlap{16};
+
+using grid_type = kpr::grid<grid_horizontal, grid_vertical, allocator_t<char>>;
+
 class collector {
-public:
-  static inline constexpr std::uint8_t color_depth{16};
-
-  template<typename Ty>
-  using allocator_t = all::frame_allocator<Ty>;
-
-  using image_type = sid::nat::aimg_t<allocator_t<cpl::nat_cc>>;
-
-  using fragment_t = fgm::fragment<color_depth>;
-  using fragment_list = std::list<fragment_t>;
-
 private:
-  static inline constexpr std::size_t grid_horizontal{4};
-  static inline constexpr std::size_t grid_vertical{2};
-  static inline constexpr std::size_t grid_overlap{16};
-
   struct match_config {
     using allocator_type = allocator_t<char>;
     static constexpr std::size_t weight_switch{10};
@@ -45,8 +48,6 @@ private:
     [[no_unique_address]] allocator_type allocator_;
   };
 
-  using grid_type =
-      kpr::grid<grid_horizontal, grid_vertical, allocator_t<char>>;
   using keypoint_extractor_t = kpe::extractor<grid_type, grid_overlap>;
 
   using pixel_alloc_t = allocator_t<cpl::nat_cc>;
@@ -56,8 +57,8 @@ public:
       : extractor_{dimensions} {
   }
 
-  template<typename Feeder, typename Comp>
-  void collect(Feeder&& feed, Comp&& comp) requires(
+  template<typename Feeder, typename Comp, typename Callback>
+  void collect(Feeder&& feed, Comp&& comp, Callback&& cb) requires(
       ifd::feeder<std::decay_t<Feeder>, pixel_alloc_t>&&
           icd::compressor<std::decay_t<Comp>, pixel_alloc_t>) {
     if (feed.has_more()) {
@@ -66,7 +67,7 @@ public:
       auto pkeys{process_init(feed, comp, pixel_alloc_t{ppool})};
       for (std::int32_t x{0}, y{0}; feed.has_more();) {
         all::memory_pool cpool{ppool.total_used() << 1};
-        pkeys = process_frame(feed, comp, pkeys, pixel_alloc_t{cpool});
+        pkeys = process_frame(feed, comp, cb, pkeys, pixel_alloc_t{cpool});
         ppool = std::move(cpool);
       }
     }
@@ -83,37 +84,41 @@ public:
 private:
   template<typename Feed, typename Comp>
   auto process_init(Feed& feed, Comp& comp, pixel_alloc_t const& alloc) {
-    auto [no, image]{feed.produce(alloc)};
+    auto frame{feed.produce(alloc)};
 
-    add_fragment(image.dimensions());
+    add_fragment(frame.image_.dimensions());
 
-    image_type median{image.dimensions(), alloc};
-    auto result{extractor_.extract(image, median, alloc)};
+    image_type median{frame.image_.dimensions(), alloc};
+    auto result{extractor_.extract(frame.image_, median, alloc)};
 
-    blit(comp, image, median, no);
+    blit(comp, frame, median);
 
     return result;
   }
 
-  template<typename Feed, typename Comp>
+  template<typename Feed, typename Comp, typename Callback>
   auto process_frame(Feed& feed,
                      Comp& comp,
+                     Callback&& cb,
                      grid_type const& previous,
                      pixel_alloc_t const& alloc) {
-    auto [no, image]{feed.produce(alloc)};
+    auto frame{feed.produce(alloc)};
+    auto& dim{frame.image_.dimensions()};
 
-    image_type median{image.dimensions(), alloc};
-    auto keys{extractor_.extract(image, median, alloc)};
+    image_type median{dim, alloc};
+    auto keys{extractor_.extract(frame.image_, median, alloc)};
 
     if (auto off{kpm::match(match_config{alloc}, previous, keys)}; off) {
       position_.x_ += off->x_;
       position_.y_ += off->y_;
     }
     else {
-      add_fragment(image.dimensions());
+      add_fragment(dim);
     }
 
-    blit(comp, image, median, no);
+    blit(comp, frame, median);
+
+    cb(*current_, frame, median, keys);
 
     return keys;
   }
@@ -125,10 +130,10 @@ private:
 
   template<typename Comp>
   inline void blit(Comp& comp,
-                   image_type const& image,
-                   image_type const& median,
-                   std::size_t frame_no) noexcept {
-    current_->blit(position_, image, {comp(image), comp(median)}, frame_no);
+                   ifd::frame<image_type> const& frame,
+                   image_type const& median) noexcept {
+    auto& [no, image]{frame};
+    current_->blit(position_, image, {comp(image), comp(median)}, no);
   }
 
 private:

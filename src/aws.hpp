@@ -10,7 +10,17 @@
 #include <intrin.h>
 
 namespace aws {
+
+using allocator_t = all::frame_allocator<cpl::nat_cc>;
+
+using image_type = sid::nat::aimg_t<allocator_t>;
+using frame_type = ifd::frame<image_type>;
+
+using heatmap_type = sid::mon::dimg_t;
+using contour_type = ctr::contour<cpl::mon_bv, all::frame_allocator<ctr::edge>>;
+
 namespace details {
+
   template<typename Image>
   inline constexpr auto pixel_size_v{sizeof(typename Image::value_type)};
 
@@ -27,7 +37,7 @@ namespace details {
   template<typename Image>
   void compare(Image const& previous,
                Image const& current,
-               sid::mon::dimg_t& output) noexcept {
+               heatmap_type& output) noexcept {
     using mm_t = __m256i;
     constexpr auto step{step_size_v<mm_t, Image>};
 
@@ -85,11 +95,12 @@ private:
   mrl::region_t margins_;
 };
 
-template<typename Feeder>
-[[nodiscard]] std::optional<window_info>
-    scan(Feeder&& feed, mrl::dimensions_t const& dimensions) requires(
-        ifd::feeder<std::decay_t<Feeder>, all::frame_allocator<cpl::nat_cc>>) {
-  using pixel_alloc_t = all::frame_allocator<cpl::nat_cc>;
+template<typename Feeder, typename Callback>
+[[nodiscard]] std::optional<window_info> scan(
+    Feeder&& feed,
+    mrl::dimensions_t const& dimensions,
+    Callback&& cb) requires(ifd::feeder<std::decay_t<Feeder>,
+                                        all::frame_allocator<cpl::nat_cc>>) {
 
   auto mask{[](auto px, auto idx) { return value(px) != 0xff; }};
 
@@ -101,20 +112,21 @@ template<typename Feeder>
 
     all::memory_pool ppool{0};
 
-    cte::extractor<cpl::mon_bv, pixel_alloc_t> extractor{dimensions,
-                                                         pixel_alloc_t{ppool}};
-    sid::mon::dimg_t heatmap{dimensions, {1}};
+    cte::extractor<cpl::mon_bv, allocator_t> extractor{dimensions,
+                                                       allocator_t{ppool}};
+    heatmap_type heatmap{dimensions, {1}};
 
-    auto [pno, pimage]{feed.produce(pixel_alloc_t{ppool})};
+    auto [pno, pimage]{feed.produce(allocator_t{ppool})};
     for (std::size_t area{}, stagnation{};
          feed.has_more() && stagnation <= 100;) {
       all::memory_pool cpool{ppool.total_used() << 1};
 
-      auto [cno, cimage]{feed.produce(pixel_alloc_t{cpool})};
+      auto current{feed.produce(allocator_t{cpool})};
 
-      details::compare(pimage, cimage, heatmap);
-      if (auto contour{details::get_best(extractor.extract(heatmap, mask))};
-          value(contour.color()) == 0) {
+      details::compare(pimage, current.image_, heatmap);
+
+      auto contour{details::get_best(extractor.extract(heatmap, mask))};
+      if (value(contour.color()) == 0) {
         if (contour.area() > area) {
           stagnation = 0;
           area = contour.area();
@@ -131,7 +143,9 @@ template<typename Feeder>
         ++stagnation;
       }
 
-      pimage = std::move(cimage);
+      cb(current, heatmap, contour, stagnation);
+
+      pimage = std::move(current.image_);
       ppool = std::move(cpool);
     }
   }
