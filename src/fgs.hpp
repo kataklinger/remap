@@ -14,16 +14,14 @@ namespace fgs {
 namespace details {
   using grid_t = kpr::grid<1, 1, std::allocator<char>>;
 
-  template<std::uint8_t Depth>
   struct snippet {
-    fgm::fragment<Depth> fragment_{};
+    fgm::fragment fragment_{};
     sid::mon::dimg_t mask_;
 
     grid_t grid_;
   };
 
-  template<std::uint8_t Depth>
-  [[nodiscard]] snippet<Depth> extract_single(fgm::fragment<Depth>&& fragment) {
+  [[nodiscard]] snippet extract_single(fgm::fragment&& fragment) {
     auto [image, mask]{fragment.blend()};
 
     sid::nat::dimg_t median{image.dimensions(), image.get_allocator()};
@@ -34,11 +32,11 @@ namespace details {
             extractor.extract(image, median, image.get_allocator())};
   }
 
-  template<std::uint8_t Depth, typename Iter>
+  template<typename Iter>
   [[nodiscard]] auto extract_all(Iter first, Iter last) {
-    using snippet_type = details::snippet<Depth>;
-    std::vector<snippet_type> snippets(std::distance(first, last),
-                                       snippet_type{});
+    std::vector<details::snippet> snippets{
+        static_cast<std::size_t>(std::distance(first, last)),
+        details::snippet{}};
 
     std::transform(
         std::execution::par, first, last, snippets.begin(), [](auto& fragment) {
@@ -139,8 +137,7 @@ namespace details {
     total_t matches_;
   };
 
-  template<std::uint8_t Depth>
-  [[nodiscard]] auto build_deltas(std::vector<snippet<Depth>> const& snippets) {
+  [[nodiscard]] auto build_deltas(std::vector<snippet> const& snippets) {
     std::vector<details::delta> deltas;
 
     auto segments{snippets.size()};
@@ -155,8 +152,7 @@ namespace details {
     return deltas;
   }
 
-  template<std::uint8_t Depth>
-  void match_all(std::vector<snippet<Depth>> const& snippets,
+  void match_all(std::vector<snippet> const& snippets,
                  std::vector<delta>& deltas) {
     std::for_each(std::execution::par,
                   deltas.begin(),
@@ -317,17 +313,9 @@ namespace details {
     std::vector<node> nodes_;
   };
 
-  template<std::uint8_t Depth>
   class splicer {
   public:
-    static inline constexpr auto depth{Depth};
-
-    using fragment_t = fgm::fragment<depth>;
-
-    using snippet_type = snippet<depth>;
-
-  public:
-    inline explicit splicer(std::vector<snippet_type>&& snippets) noexcept
+    inline explicit splicer(std::vector<snippet>&& snippets) noexcept
         : snippets_{std::move(snippets)} {
     }
 
@@ -339,13 +327,13 @@ namespace details {
       result_.back().blit(offset, std::move(snippets_[snippet].fragment_));
     }
 
-    [[nodiscard]] inline std::list<fragment_t> get_result() noexcept {
+    [[nodiscard]] inline std::list<fgm::fragment> get_result() noexcept {
       return std::move(result_);
     }
 
   private:
-    std::vector<snippet_type> snippets_;
-    std::list<fragment_t> result_;
+    std::vector<snippet> snippets_;
+    std::list<fgm::fragment> result_;
   };
 
   [[nodiscard]] graph build_graph(std::vector<delta> const& deltas,
@@ -361,16 +349,16 @@ namespace details {
   }
 } // namespace details
 
-template<std::uint8_t Depth, typename Iter>
-[[nodiscard]] std::list<fgm::fragment<Depth>> splice(Iter first, Iter last) {
-  auto snippets{details::extract_all<Depth>(first, last)};
+template<typename Iter>
+[[nodiscard]] std::list<fgm::fragment> splice(Iter first, Iter last) {
+  auto snippets{details::extract_all(first, last)};
   auto deltas{details::build_deltas(snippets)};
   auto size{snippets.size()};
 
   details::match_all(snippets, deltas);
   details::crossmatch_all(deltas, size);
 
-  details::splicer<Depth> spliced{std::move(snippets)};
+  details::splicer spliced{std::move(snippets)};
   build_graph(deltas, size).process(spliced);
 
   return spliced.get_result();

@@ -87,7 +87,7 @@ struct aws_callback {
 };
 
 struct frc_callback {
-  inline void operator()(frc::fragment_t const& fragment,
+  inline void operator()(fgm::fragment const& fragment,
                          frc::frame_type const& frame_type,
                          frc::image_type const& median,
                          frc::grid_type const& grid) const noexcept {
@@ -95,7 +95,7 @@ struct frc_callback {
 };
 
 struct fdf_callback {
-  inline void operator()(fdf::fragment_t const& fragment,
+  inline void operator()(fgm::fragment const& fragment,
                          std::size_t fragment_no,
                          sid::nat::dimg_t const& image,
                          std::size_t frame_no,
@@ -121,7 +121,7 @@ struct mpb_callbacks {
   }
 
   inline void
-      operator()(std::vector<frc::fragment_t> const& fragments) const noexcept {
+      operator()(std::vector<fgm::fragment> const& fragments) const noexcept {
   }
 };
 

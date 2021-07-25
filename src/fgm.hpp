@@ -8,8 +8,10 @@
 #include <algorithm>
 
 namespace fgm {
-template<std::uint8_t Depth>
-using dot_t = std::array<std::uint16_t, Depth>;
+
+inline constexpr std::uint8_t depth{16};
+
+using dot_type = std::array<std::uint16_t, depth>;
 
 using point_t = cdt::point<std::int32_t>;
 
@@ -30,12 +32,8 @@ struct frame {
   packed_data data_;
 };
 
-template<std::uint8_t Depth>
 class fragment {
 public:
-  static inline constexpr auto depth{Depth};
-
-  using dot_type = dot_t<depth>;
   using matrix_type = mrl::matrix<dot_type>;
 
 public:

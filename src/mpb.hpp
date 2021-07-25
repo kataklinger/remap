@@ -44,8 +44,7 @@ public:
 
     callbacks(fragments);
 
-    auto spliced{
-        fgs::splice<frc::color_depth>(fragments.begin(), fragments.end())};
+    auto spliced{fgs::splice(fragments.begin(), fragments.end())};
 
     callbacks(spliced);
 

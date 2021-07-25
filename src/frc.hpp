@@ -19,10 +19,7 @@ using allocator_t = all::frame_allocator<Ty>;
 using image_type = sid::nat::aimg_t<allocator_t<cpl::nat_cc>>;
 using frame_type = ifd::frame<image_type>;
 
-static inline constexpr std::uint8_t color_depth{16};
-
-using fragment_t = fgm::fragment<color_depth>;
-using fragment_list = std::list<fragment_t>;
+using fragment_list = std::list<fgm::fragment>;
 
 static inline constexpr std::size_t grid_horizontal{4};
 static inline constexpr std::size_t grid_vertical{2};
@@ -73,7 +70,7 @@ public:
     }
   }
 
-  [[nodiscard]] inline fragment_t const& current() const noexcept {
+  [[nodiscard]] inline fgm::fragment const& current() const noexcept {
     return *current_;
   }
 
@@ -142,6 +139,6 @@ private:
   fgm::point_t position_{};
 
   fragment_list fragments_;
-  fragment_t* current_{nullptr};
+  fgm::fragment* current_{nullptr};
 };
 } // namespace frc

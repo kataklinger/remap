@@ -246,10 +246,9 @@ namespace details {
     return result;
   }
 
-  [[nodiscard]] sid::nat::dimg_t
-      blur(fgm::fragment<16>::matrix_type const& dots,
-           mrl::matrix<float> const& heatmap,
-           float dev) {
+  [[nodiscard]] sid::nat::dimg_t blur(fgm::fragment::matrix_type const& dots,
+                                      mrl::matrix<float> const& heatmap,
+                                      float dev) {
     auto kernel{details::gauss_kernel(dev)};
 
     auto size{kernel.width()};
@@ -307,7 +306,7 @@ using filter_size = std::integral_constant<std::uint8_t, Size>;
 
 template<typename Callback, std::uint8_t Size>
 [[nodiscard]] sid::nat::dimg_t
-    filter(fgm::fragment<16> const& fragment,
+    filter(fgm::fragment const& fragment,
            Callback&& cb,
            float dev,
            std::integral_constant<std::uint8_t, Size> /*unused*/) {
