@@ -16,57 +16,85 @@ class builder {
 public:
   using adapter_type = Adapter;
 
+private:
+  using callbacks_type = typename Adapter::callbacks_type;
+  using feed_type = typename Adapter::feed_type;
+
 public:
   inline builder(adapter_type const& adapter) noexcept
       : adapter_{adapter} {
   }
 
   [[nodiscard]] std::vector<sid::nat::dimg_t> build() {
-    auto& callbacks{adapter_.get_callbacks()};
+    if (auto window{get_window()}; window) {
+      auto dimensions{window->bounds().dimensions()};
 
-    auto window{aws::scan(
-        adapter_.get_feed(), adapter_.get_screen_dimensions(), callbacks)};
+      auto feed{adapter_.get_feed(window->margins())};
 
-    callbacks(window);
-
-    if (!window) {
-      return {};
+      auto fragments{collect(feed, dimensions)};
+      auto spliced{splice(fragments)};
+      auto filtered{filter(dimensions, spliced)};
+      return clean(filtered);
     }
 
-    auto window_dim{window->bounds().dimensions()};
+    return {};
+  }
 
-    frc::collector collector{window_dim};
-    collector.collect(adapter_.get_feed(window->margins()),
-                      adapter_.get_compression(),
-                      callbacks);
+private:
+  [[nodiscard]] inline auto get_window() {
+    auto result{
+        aws::scan(adapter_.get_feed(), adapter_.get_screen_dimensions(), cb())};
 
-    auto fragments{collector.complete()};
+    cb()(result);
+    return result;
+  }
 
-    callbacks(fragments);
+  [[nodiscard]] inline auto collect(feed_type& feed,
+                                    mrl::dimensions_t const& window) {
+    frc::collector collector{window};
 
-    auto spliced{fgs::splice(fragments.begin(), fragments.end())};
+    collector.collect(feed, adapter_.get_compression(), cb());
+    auto result{collector.complete()};
 
-    callbacks(spliced);
+    cb()(result);
+    return result;
+  }
 
-    auto filtered{fdf::filter(
-        spliced, window_dim, adapter_.get_compression(), callbacks)};
+  [[nodiscard]] inline auto splice(std::list<fgm::fragment>& fragments) {
+    auto result{fgs::splice(fragments.begin(), fragments.end())};
 
-    callbacks(filtered);
+    cb()(result);
+    return result;
+  }
 
-    std::vector<sid::nat::dimg_t> cleaned{filtered.size()};
+  [[nodiscard]] inline auto filter(mrl::dimensions_t const& window,
+                                   std::list<fgm::fragment>& fragments) {
+    auto result{
+        fdf::filter(fragments, window, adapter_.get_compression(), cb())};
+
+    cb()(result);
+    return result;
+  }
+
+  [[nodiscard]] inline auto clean(std::vector<fgm::fragment>& fragments) {
+    std::vector<sid::nat::dimg_t> result{fragments.size()};
     std::transform(
         std::execution::par,
-        filtered.begin(),
-        filtered.end(),
-        cleaned.begin(),
-        [&callbacks, dev = adapter_.get_artifact_filter_dev()](auto& fragment) {
+        fragments.begin(),
+        fragments.end(),
+        result.begin(),
+        [this, dev = adapter_.get_artifact_filter_dev()](auto& fragment) {
           return arf::filter(fragment,
-                             callbacks,
+                             cb(),
                              dev,
                              typename adapter_type::artifact_filter_size{});
         });
 
-    return cleaned;
+    return result;
+  }
+
+  [[nodiscard]] inline auto& cb() noexcept {
+    return adapter_.get_callbacks();
   }
 
 private:

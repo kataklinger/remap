@@ -133,6 +133,9 @@ struct callbacks : aws_callback,
 
 class build_adapter {
 public:
+  using callbacks_type = callbacks;
+  using feed_type = file_feed;
+
   static constexpr mrl::dimensions_t screen_dimensions{388, 312};
   static constexpr float artifact_filter_dev{2.0f};
   using artifact_filter_size = arf::filter_size<15>;
@@ -149,12 +152,12 @@ public:
     });
   }
 
-  [[nodiscard]] inline file_feed get_feed() const {
-    return file_feed{screen_dimensions, files_};
+  [[nodiscard]] inline feed_type get_feed() const {
+    return {screen_dimensions, files_};
   }
 
-  [[nodiscard]] inline file_feed get_feed(mrl::region_t crop) const {
-    return file_feed{screen_dimensions, files_, crop};
+  [[nodiscard]] inline feed_type get_feed(mrl::region_t crop) const {
+    return {screen_dimensions, files_, crop};
   }
 
   [[nodiscard]] inline native_compression get_compression() const {
@@ -170,14 +173,14 @@ public:
     return artifact_filter_dev;
   }
 
-  [[nodiscard]] inline callbacks& get_callbacks() noexcept {
+  [[nodiscard]] inline callbacks_type& get_callbacks() noexcept {
     return callbacks_;
   }
 
 private:
   file_list files_;
 
-  callbacks callbacks_{};
+  callbacks_type callbacks_{};
 };
 
 int main() {

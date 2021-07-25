@@ -18,7 +18,7 @@ struct background {
 
 namespace details {
 
-  [[nodiscard]] std::vector<background>
+  [[nodiscard]] inline std::vector<background>
       get_background(std::list<fgm::fragment> const& fragments) {
     std::vector<background> results{fragments.size()};
     std::transform(std::execution::par,
