@@ -21,7 +21,7 @@ using fragment_t = fgm::fragment<16>;
 namespace details {
 
   [[nodiscard]] std::vector<background>
-      get_background(std::vector<fragment_t> const& fragments) {
+      get_background(std::list<fragment_t> const& fragments) {
     std::vector<background> results{fragments.size()};
     std::transform(std::execution::par,
                    fragments.begin(),
@@ -41,7 +41,7 @@ using contours_t = fde::contours_t<std::allocator<cpl::nat_cc>>;
 
 template<typename Comp, typename Callback>
 [[nodiscard]] std::vector<fragment_t> filter(
-    std::vector<fragment_t> const& fragments,
+    std::list<fragment_t> const& fragments,
     std::vector<background> const& backgrounds,
     mrl::dimensions_t const& frame_dim,
     Comp&& comp,
@@ -49,9 +49,9 @@ template<typename Comp, typename Callback>
                                               std::allocator<cpl::nat_cc>>) {
   std::vector<fragment_t> results{};
 
-  for (std::size_t i{0}, l{fragments.size()}; i < l; ++i) {
-    auto& fragment = fragments[i];
-    auto& background = backgrounds[i];
+  std::size_t i{0};
+  for (auto& fragment : fragments) {
+    auto& background{backgrounds[i]};
 
     fde::extractor<std::allocator<char>> extractor{background.image_,
                                                    frame_dim};
@@ -69,6 +69,8 @@ template<typename Comp, typename Callback>
 
       cb(result, i, image, no, median, pos, foreground, mask);
     }
+
+    ++i;
   }
 
   return results;
@@ -76,7 +78,7 @@ template<typename Comp, typename Callback>
 
 template<typename Comp, typename Callback>
 [[nodiscard]] inline std::vector<fragment_t> filter(
-    std::vector<fragment_t> const& fragments,
+    std::list<fragment_t> const& fragments,
     mrl::dimensions_t const& frame_dim,
     Comp&& comp,
     Callback&& cb) requires(icd::decompressor<std::decay_t<Comp>,

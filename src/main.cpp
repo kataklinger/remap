@@ -106,28 +106,30 @@ struct fdf_callback {
   }
 };
 
-class callbacks {
-public:
-  inline callbacks() {
+struct arf_callback {
+  inline void operator()(sid::nat::dimg_t const& fragment,
+                         mrl::matrix<float> const& heatmap) const noexcept {
   }
-
-  [[nodiscard]] inline aws_callback& aws() noexcept {
-    return aws_;
-  }
-
-  [[nodiscard]] inline frc_callback& frc() noexcept {
-    return frc_;
-  }
-
-  [[nodiscard]] inline fdf_callback& fdf() noexcept {
-    return fdf_;
-  }
-
-private:
-  aws_callback aws_;
-  frc_callback frc_;
-  fdf_callback fdf_;
 };
+
+struct mpb_callbacks {
+  inline void
+      operator()(std::optional<aws::window_info> const& window) const noexcept {
+  }
+
+  inline void operator()(frc::fragment_list const& fragments) const noexcept {
+  }
+
+  inline void
+      operator()(std::vector<frc::fragment_t> const& fragments) const noexcept {
+  }
+};
+
+struct callbacks : aws_callback,
+                   frc_callback,
+                   fdf_callback,
+                   arf_callback,
+                   mpb_callbacks {};
 
 class build_adapter {
 public:
@@ -175,7 +177,7 @@ public:
 private:
   file_list files_;
 
-  callbacks callbacks_;
+  callbacks callbacks_{};
 };
 
 int main() {

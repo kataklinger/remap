@@ -339,18 +339,13 @@ namespace details {
       result_.back().blit(offset, std::move(snippets_[snippet].fragment_));
     }
 
-    [[nodiscard]] inline std::vector<fragment_t> const&
-        result() const noexcept {
-      return result_;
-    }
-
-    [[nodiscard]] inline std::vector<fragment_t>& result() noexcept {
-      return result_;
+    [[nodiscard]] inline std::list<fragment_t> get_result() noexcept {
+      return std::move(result_);
     }
 
   private:
     std::vector<snippet_type> snippets_;
-    std::vector<fragment_t> result_;
+    std::list<fragment_t> result_;
   };
 
   [[nodiscard]] graph build_graph(std::vector<delta> const& deltas,
@@ -367,7 +362,7 @@ namespace details {
 } // namespace details
 
 template<std::uint8_t Depth, typename Iter>
-[[nodiscard]] std::vector<fgm::fragment<Depth>> splice(Iter first, Iter last) {
+[[nodiscard]] std::list<fgm::fragment<Depth>> splice(Iter first, Iter last) {
   auto snippets{details::extract_all<Depth>(first, last)};
   auto deltas{details::build_deltas(snippets)};
   auto size{snippets.size()};
@@ -378,6 +373,6 @@ template<std::uint8_t Depth, typename Iter>
   details::splicer<Depth> spliced{std::move(snippets)};
   build_graph(deltas, size).process(spliced);
 
-  return std::move(spliced.result());
+  return spliced.get_result();
 }
 } // namespace fgs

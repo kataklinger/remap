@@ -305,13 +305,18 @@ namespace details {
 template<std::uint8_t Size>
 using filter_size = std::integral_constant<std::uint8_t, Size>;
 
-template<std::uint8_t Size>
+template<typename Callback, std::uint8_t Size>
 [[nodiscard]] sid::nat::dimg_t
     filter(fgm::fragment<16> const& fragment,
+           Callback&& cb,
            float dev,
            std::integral_constant<std::uint8_t, Size> /*unused*/) {
   auto heatmap{details::generate_heatmap<Size>(fragment.blend())};
-  return details::blur(fragment.dots(), heatmap, dev);
+  auto result{details::blur(fragment.dots(), heatmap, dev)};
+
+  cb(result, heatmap);
+
+  return result;
 }
 
 } // namespace arf
