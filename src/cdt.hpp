@@ -8,6 +8,7 @@
 #include <tuple>
 
 namespace cdt {
+
 template<std::integral Ty>
 struct point {
   using value_type = Ty;

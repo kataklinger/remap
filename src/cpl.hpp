@@ -11,6 +11,7 @@
 #include <type_traits>
 
 namespace cpl {
+
 template<typename Ty>
 concept pixel_color = (std::is_integral_v<Ty> || std::is_floating_point_v<Ty>);
 

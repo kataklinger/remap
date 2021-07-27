@@ -6,6 +6,7 @@
 #include <filesystem>
 
 namespace png {
+
 int write(std::filesystem::path const& path,
           int width,
           int height,
@@ -94,4 +95,5 @@ finalise:
 
   return code;
 }
+
 } // namespace png

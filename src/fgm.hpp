@@ -212,4 +212,5 @@ private:
 
   std::vector<frame> frames_;
 };
+
 } // namespace fgm

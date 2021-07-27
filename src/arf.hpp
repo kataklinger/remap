@@ -11,7 +11,9 @@
 #include <utility>
 
 namespace arf {
+
 namespace details {
+
   using unit_t = std::size_t;
 
   template<std::uint8_t Size>

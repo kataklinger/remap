@@ -156,4 +156,5 @@ template<typename Feeder, typename Callback>
 
   return {};
 }
+
 } // namespace aws

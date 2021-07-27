@@ -11,7 +11,9 @@
 #include <stack>
 
 namespace fgs {
+
 namespace details {
+
   using grid_t = kpr::grid<1, 1, std::allocator<char>>;
 
   struct snippet {
@@ -347,6 +349,7 @@ namespace details {
 
     return result;
   }
+
 } // namespace details
 
 template<typename Iter>
@@ -363,4 +366,5 @@ template<typename Iter>
 
   return spliced.get_result();
 }
+
 } // namespace fgs

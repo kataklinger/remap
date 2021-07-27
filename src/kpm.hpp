@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace kpm {
+
 template<typename Ty>
 concept match_config = requires(Ty cfg) {
   requires std::unsigned_integral<decltype(Ty::weight_switch)>;
@@ -25,8 +26,7 @@ concept match_config = requires(Ty cfg) {
 
   typename Ty::allocator_type;
 
-  { cfg.get_allocator() }
-  ->std::convertible_to<typename Ty::allocator_type>;
+  { cfg.get_allocator() } -> std::convertible_to<typename Ty::allocator_type>;
 };
 
 template<match_config Cfg, typename Ty>
@@ -194,11 +194,10 @@ namespace details {
   };
 
   template<typename Region>
-  [[nodiscard]] intersect_data
-      filter_keypoints(Region const& region,
-                       sid::mon::dimg_t const& mask,
-                       cdt::offset_t delta,
-                       mrl::region_t limits) noexcept {
+  [[nodiscard]] intersect_data filter_keypoints(Region const& region,
+                                                sid::mon::dimg_t const& mask,
+                                                cdt::offset_t delta,
+                                                mrl::region_t limits) noexcept {
     std::size_t count{};
 
     for (auto const& [c, group] : region.points()) {
@@ -271,14 +270,14 @@ namespace details {
     return area_rate >= 0.015f && fst.match_keypoints_density_ >= min_density &&
            match_rate >= 1 - 0.35f * std::hypotf(overlap_rate, 1 - area_rate);
   }
+
 } // namespace details
 
 template<match_config Cfg, typename Region>
-[[nodiscard]] inline ticket_t<Cfg>
-    match(Cfg const& config,
-          Region const& preg,
-          sid::mon::dimg_t const& pmask,
-          Region const& creg,
+[[nodiscard]] inline ticket_t<Cfg> match(Cfg const& config,
+                                         Region const& preg,
+                                         sid::mon::dimg_t const& pmask,
+                                         Region const& creg,
                                          sid::mon::dimg_t const& cmask) {
   using namespace details;
 
@@ -338,4 +337,5 @@ template<match_config Cfg,
   return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2),
                       gird_t::region_count);
 }
+
 } // namespace kpm

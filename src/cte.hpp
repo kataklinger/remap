@@ -11,6 +11,7 @@
 #include <queue>
 
 namespace cte {
+
 inline constexpr std::uint16_t horizon_id{0xffff};
 
 template<cpl::pixel Ty>
@@ -170,4 +171,5 @@ private:
   outline_type outline_;
   path_type path_;
 };
+
 } // namespace cte

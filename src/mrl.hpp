@@ -10,6 +10,7 @@
 #include <vector>
 
 namespace mrl {
+
 using size_type = std::size_t;
 using point_t = cdt::point<size_type>;
 using dimensions_t = cdt::dimensions<size_type>;
@@ -95,8 +96,8 @@ public:
   }
 
   template<typename Fn>
-  [[nodiscard]] auto map(Fn convert) const
-      requires std::invocable<Fn, value_type const&> {
+  [[nodiscard]] auto
+      map(Fn convert) const requires std::invocable<Fn, value_type const&> {
     using target_type = std::invoke_result_t<Fn, const value_type&>;
     matrix<target_type> output{dimensions_, data_.get_allocator()};
 
@@ -154,4 +155,5 @@ private:
 
   std::vector<value_type, allocator_type> data_;
 };
+
 } // namespace mrl

@@ -141,4 +141,5 @@ private:
   fragment_list fragments_;
   fgm::fragment* current_{nullptr};
 };
+
 } // namespace frc

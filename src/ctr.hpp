@@ -10,6 +10,7 @@
 #include <vector>
 
 namespace ctr {
+
 enum class edge_side : std::uint8_t {
   none = 0,
   left = 1,

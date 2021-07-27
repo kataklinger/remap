@@ -16,6 +16,7 @@
 #include <utility>
 
 namespace kpr {
+
 static inline constexpr uint8_t code_length = 13;
 static inline constexpr uint8_t code_max_index = code_length - 1;
 
@@ -216,10 +217,12 @@ concept gridlike = requires(Ty g) {
   typename Ty::allocator_type;
 
   requires std::unsigned_integral<decltype(Ty::width)>;
-  requires Ty::width > 0;
+  requires Ty::width >
+  0;
 
   requires std::unsigned_integral<decltype(Ty::height)>;
-  requires Ty::height > 0;
+  requires Ty::height >
+  0;
 
   {g.add(std::declval<code&&>(),
          std::declval<mrl::point_t&&>(),

@@ -100,4 +100,5 @@ private:
 private:
   adapter_type adapter_;
 };
+
 } // namespace mpb

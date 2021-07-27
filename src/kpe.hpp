@@ -10,6 +10,7 @@
 #include <intrin.h>
 
 namespace kpe {
+
 using ksize_t = std::uint8_t;
 
 inline constexpr ksize_t kernel_size{5};

@@ -10,6 +10,7 @@
 
 namespace kpe {
 namespace v2 {
+
   using ksize_t = std::uint8_t;
 
   class extractor {
@@ -202,5 +203,6 @@ namespace v2 {
 
     kpr::grid grid_;
   };
+
 } // namespace v2
 } // namespace kpe

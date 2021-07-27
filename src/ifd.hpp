@@ -26,4 +26,5 @@ concept feeder = requires(Ty a) {
     a.produce(std::declval<Alloc&&>())
     } -> std::same_as<frame<sid::nat::aimg_t<Alloc>>>;
 };
+
 } // namespace ifd

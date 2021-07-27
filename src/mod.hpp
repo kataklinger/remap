@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 namespace mod {
+
 template<cpl::pixel Ty, typename Alloc = std::allocator<char>>
 class detector {
 public:
@@ -242,4 +243,5 @@ private:
 
   motion_tracker_t tracker_;
 };
+
 } // namespace mod
