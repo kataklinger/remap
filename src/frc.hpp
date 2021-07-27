@@ -19,8 +19,6 @@ using allocator_t = all::frame_allocator<Ty>;
 using image_type = sid::nat::aimg_t<allocator_t<cpl::nat_cc>>;
 using frame_type = ifd::frame<image_type>;
 
-using fragment_list = std::list<fgm::fragment>;
-
 static inline constexpr std::size_t grid_horizontal{4};
 static inline constexpr std::size_t grid_vertical{2};
 static inline constexpr std::size_t grid_overlap{16};
@@ -74,7 +72,7 @@ public:
     return *current_;
   }
 
-  [[nodiscard]] inline fragment_list complete() noexcept {
+  [[nodiscard]] inline std::list<fgm::fragment> complete() noexcept {
     return std::move(fragments_);
   }
 
@@ -138,7 +136,7 @@ private:
 
   fgm::point_t position_{};
 
-  fragment_list fragments_;
+  std::list<fgm::fragment> fragments_;
   fgm::fragment* current_{nullptr};
 };
 

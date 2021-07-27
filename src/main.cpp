@@ -5,14 +5,9 @@
 
 #include "pngu.hpp"
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-
-#include <cstring>
-#include <queue>
-#include <string>
 
 using file_list = std::vector<std::filesystem::path>;
 
@@ -63,6 +58,62 @@ private:
   std::optional<mrl::region_t> crop_;
 };
 
+class perf_counter {
+public:
+  inline perf_counter(std::string name, std::size_t sample_size)
+      : name_{name}
+      , sample_size_{sample_size} {
+  }
+
+  bool count() {
+    ++total_count_;
+    ++sample_count_;
+
+    if (sample_count_ == sample_size_) {
+      auto current{now()};
+
+      auto duration_sample{current - last_};
+      auto duration_total{current - begin_};
+
+      std::cout << "[" << name_ << " # " << std::setw(5) << total_count_
+                << "] step avg: " << std::setw(4)
+                << sample_count_ * 1000 / duration_sample
+                << " fps; total avg: " << std::setw(4)
+                << total_count_ * 1000 / duration_total
+                << "fps; total:" << std::setw(5) << duration_total / 1000 << "s"
+                << std::endl;
+
+      sample_count_ = 0;
+      last_ = current;
+
+      return true;
+    }
+
+    if (total_count_ == 1) {
+      begin_ = last_ = now();
+    }
+
+    return false;
+  }
+
+private:
+  inline std::uint64_t now() const noexcept {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch())
+        .count();
+  }
+
+private:
+  std::string name_;
+  std::size_t sample_size_;
+
+  std::size_t sample_count_{};
+  std::size_t total_count_{};
+
+  std::uint64_t begin_{};
+  std::uint64_t last_{};
+};
+
 class native_compression {
 public:
   template<typename Alloc>
@@ -82,16 +133,24 @@ struct aws_callback {
   inline void operator()(aws::frame_type const& frame,
                          aws::heatmap_type const& heatmap,
                          aws::contour_type const& contour,
-                         std::size_t stagnation) const noexcept {
+                         std::size_t stagnation) noexcept {
+    counter_.count();
   }
+
+private:
+  perf_counter counter_{"aws", 100};
 };
 
 struct frc_callback {
   inline void operator()(fgm::fragment const& fragment,
                          frc::frame_type const& frame_type,
                          frc::image_type const& median,
-                         frc::grid_type const& grid) const noexcept {
+                         frc::grid_type const& grid) noexcept {
+    counter_.count();
   }
+
+private:
+  perf_counter counter_{"frc", 100};
 };
 
 struct fdf_callback {
@@ -102,8 +161,12 @@ struct fdf_callback {
                          sid::nat::dimg_t const& median,
                          fgm::point_t const& pos,
                          fdf::contours_t const& foreground,
-                         sid::mon::dimg_t const& mask) const noexcept {
+                         sid::mon::dimg_t const& mask) noexcept {
+    counter_.count();
   }
+
+private:
+  perf_counter counter_{"fdf", 1000};
 };
 
 struct arf_callback {
@@ -117,7 +180,8 @@ struct mpb_callbacks {
       operator()(std::optional<aws::window_info> const& window) const noexcept {
   }
 
-  inline void operator()(frc::fragment_list const& fragments) const noexcept {
+  inline void
+      operator()(std::list<fgm::fragment> const& fragments) const noexcept {
   }
 
   inline void
