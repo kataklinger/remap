@@ -267,7 +267,8 @@ namespace details {
     sid::nat::dimg_t result{heatmap.dimensions()};
     auto output{result.data()};
 
-    for (auto outer{input + margin}, ocend{dots.end() - vstride - margin};
+    for (auto outer{input + vstride + margin},
+         ocend{dots.end() - vstride - margin};
          outer < ocend;
          outer += size) {
       for (auto orend{outer + dots.width() - size}; outer < orend; ++outer) {
