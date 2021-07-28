@@ -76,12 +76,14 @@ public:
       auto duration_sample{current - last_};
       auto duration_total{current - begin_};
 
-      std::cout << "[" << name_ << " # " << std::setw(5) << total_count_
-                << "] step avg: " << std::setw(4)
-                << sample_count_ * 1000 / duration_sample
-                << " fps; total avg: " << std::setw(4)
-                << total_count_ * 1000 / duration_total
-                << "fps; total:" << std::setw(5) << duration_total / 1000 << "s"
+      std::cout << std::format(
+                       "[{} # {:5}] step avg: {:4} fps; total avg: {:4} fps; "
+                       "total: {:4} s",
+                       name_,
+                       total_count_,
+                       sample_count_ * 1000 / duration_sample,
+                       total_count_ * 1000 / duration_total,
+                       duration_total / 1000)
                 << std::endl;
 
       sample_count_ = 0;
