@@ -149,28 +149,59 @@ private:
 };
 
 template<typename Ty>
-class memory_swing {
+class memory_stack {
+public:
+  using allocator_type = frame_allocator<Ty>;
+
 public:
   inline void prepare() {
     *current_ = {previous_->total_used() << 1};
   }
 
-  inline void swing() noexcept {
+  inline void rotate() noexcept {
     std::swap(previous_, current_);
   }
 
-  [[nodiscard]] inline frame_allocator<Ty> current() const noexcept {
-    return frame_allocator<Ty>{*current_};
+  [[nodiscard]] inline allocator_type current() const noexcept {
+    return allocator_type{*current_};
   }
 
-  [[nodiscard]] inline frame_allocator<Ty> previous() const noexcept {
-    return frame_allocator<Ty>{*previous_};
+  [[nodiscard]] inline allocator_type previous() const noexcept {
+    return allocator_type{*previous_};
   }
 
 private:
   memory_pool pools_[2];
   memory_pool* previous_{pools_};
   memory_pool* current_{pools_ + 1};
+};
+
+template<typename Ty>
+class memory_swing {
+public:
+  using stack_type = memory_stack<Ty>;
+  using allocator_type = typename stack_type::allocator_type;
+
+public:
+  inline explicit memory_swing(stack_type& stack) noexcept
+      : stack_{&stack} {
+    stack_->prepare();
+  }
+
+  inline ~memory_swing() {
+    stack_->rotate();
+  }
+
+  [[nodiscard]] inline operator allocator_type() const noexcept {
+    return get();
+  }
+
+  [[nodiscard]] inline allocator_type get() const noexcept {
+    return stack_->current();
+  }
+
+private:
+  stack_type* stack_;
 };
 
 } // namespace all

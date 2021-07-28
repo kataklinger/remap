@@ -114,17 +114,16 @@ template<typename Feeder, typename Callback>
 
   heatmap_type heatmap{dimensions, {1}};
 
-  all::memory_swing<cpl::nat_cc> memory{};
+  all::memory_stack<cpl::nat_cc> memory{};
   auto [pno, pimage]{feed.produce(memory.previous())};
   for (std::size_t area{}, stagnation{};
        feed.has_more() && stagnation <= 100;) {
-    memory.prepare();
+    all::memory_swing swing{memory};
 
-    auto current{feed.produce(memory.current())};
+    auto current{feed.produce(swing.get())};
 
     details::compare(pimage, current.image_, heatmap);
-    cte::extractor<cpl::mon_bv, allocator_t> extractor{dimensions,
-                                                       memory.current()};
+    cte::extractor<cpl::mon_bv, allocator_t> extractor{dimensions, swing};
 
     auto contour{details::get_best(extractor.extract(heatmap, mask))};
 
@@ -148,7 +147,6 @@ template<typename Feeder, typename Callback>
     cb(current, heatmap, contour, stagnation);
 
     pimage = std::move(current.image_);
-    memory.swing();
   }
 
   if (result.has_value()) {
