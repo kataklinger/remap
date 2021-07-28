@@ -12,6 +12,7 @@
 namespace aws {
 
 using allocator_t = all::frame_allocator<cpl::nat_cc>;
+// using allocator_t = std::allocator<cpl::nat_cc>;
 
 using image_type = sid::nat::aimg_t<allocator_t>;
 using frame_type = ifd::frame<image_type>;
@@ -99,55 +100,55 @@ template<typename Feeder, typename Callback>
 [[nodiscard]] std::optional<window_info> scan(
     Feeder&& feed,
     mrl::dimensions_t const& dimensions,
-    Callback&& cb) requires(ifd::feeder<std::decay_t<Feeder>,
-                                        all::frame_allocator<cpl::nat_cc>>) {
-
+    Callback&& cb) requires(ifd::feeder<std::decay_t<Feeder>, allocator_t>) {
   auto mask{[](auto px, auto idx) { return value(px) != 0xff; }};
 
   std::optional<mrl::region_t> result{};
-  if (feed.has_more()) {
-    auto const min_area{dimensions.area() / 3};
-    auto const min_height{2 * dimensions.height_ / 5};
-    auto const min_width{2 * dimensions.width_ / 3};
+  if (!feed.has_more()) {
+    return {};
+  }
 
-    all::memory_pool ppool{0};
+  auto const min_area{dimensions.area() / 3};
+  auto const min_height{2 * dimensions.height_ / 5};
+  auto const min_width{2 * dimensions.width_ / 3};
 
+  heatmap_type heatmap{dimensions, {1}};
+
+  all::memory_swing<cpl::nat_cc> memory{};
+  auto [pno, pimage]{feed.produce(memory.previous())};
+  for (std::size_t area{}, stagnation{};
+       feed.has_more() && stagnation <= 100;) {
+    memory.prepare();
+
+    auto current{feed.produce(memory.current())};
+
+    details::compare(pimage, current.image_, heatmap);
     cte::extractor<cpl::mon_bv, allocator_t> extractor{dimensions,
-                                                       allocator_t{ppool}};
-    heatmap_type heatmap{dimensions, {1}};
+                                                       memory.current()};
 
-    auto [pno, pimage]{feed.produce(allocator_t{ppool})};
-    for (std::size_t area{}, stagnation{};
-         feed.has_more() && stagnation <= 100;) {
-      all::memory_pool cpool{ppool.total_used() << 1};
+    auto contour{details::get_best(extractor.extract(heatmap, mask))};
 
-      auto current{feed.produce(allocator_t{cpool})};
+    if (value(contour.color()) == 0) {
+      if (contour.area() > area) {
+        stagnation = 0;
+        area = contour.area();
 
-      details::compare(pimage, current.image_, heatmap);
-
-      auto contour{details::get_best(extractor.extract(heatmap, mask))};
-      if (value(contour.color()) == 0) {
-        if (contour.area() > area) {
-          stagnation = 0;
-          area = contour.area();
-
-          if (auto window{contour.enclosure()};
-              result || area > min_area && window.height() > min_height &&
-                            window.width() > min_width) {
-            result = window;
-          }
+        if (auto window{contour.enclosure()};
+            result || area > min_area && window.height() > min_height &&
+                          window.width() > min_width) {
+          result = window;
         }
       }
-
-      if (result) {
-        ++stagnation;
-      }
-
-      cb(current, heatmap, contour, stagnation);
-
-      pimage = std::move(current.image_);
-      ppool = std::move(cpool);
     }
+
+    if (result) {
+      ++stagnation;
+    }
+
+    cb(current, heatmap, contour, stagnation);
+
+    pimage = std::move(current.image_);
+    memory.swing();
   }
 
   if (result.has_value()) {

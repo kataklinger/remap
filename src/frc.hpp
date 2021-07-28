@@ -57,13 +57,15 @@ public:
       ifd::feeder<std::decay_t<Feeder>, pixel_alloc_t>&&
           icd::compressor<std::decay_t<Comp>, pixel_alloc_t>) {
     if (feed.has_more()) {
-      all::memory_pool ppool{0};
+      all::memory_swing<cpl::nat_cc> memory{};
 
-      auto pkeys{process_init(feed, comp, pixel_alloc_t{ppool})};
+      auto pkeys{process_init(feed, comp, memory.previous())};
       for (std::int32_t x{0}, y{0}; feed.has_more();) {
-        all::memory_pool cpool{ppool.total_used() << 1};
-        pkeys = process_frame(feed, comp, cb, pkeys, pixel_alloc_t{cpool});
-        ppool = std::move(cpool);
+        memory.prepare();
+
+        pkeys = process_frame(feed, comp, cb, pkeys, memory.current());
+
+        memory.swing();
       }
     }
   }

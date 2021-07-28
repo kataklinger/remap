@@ -148,4 +148,29 @@ private:
   friend class frame_allocator;
 };
 
+template<typename Ty>
+class memory_swing {
+public:
+  inline void prepare() {
+    *current_ = {previous_->total_used() << 1};
+  }
+
+  inline void swing() noexcept {
+    std::swap(previous_, current_);
+  }
+
+  [[nodiscard]] inline frame_allocator<Ty> current() const noexcept {
+    return frame_allocator<Ty>{*current_};
+  }
+
+  [[nodiscard]] inline frame_allocator<Ty> previous() const noexcept {
+    return frame_allocator<Ty>{*previous_};
+  }
+
+private:
+  memory_pool pools_[2];
+  memory_pool* previous_{pools_};
+  memory_pool* current_{pools_ + 1};
+};
+
 } // namespace all
