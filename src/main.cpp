@@ -6,6 +6,7 @@
 #include "pngu.hpp"
 
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 
@@ -247,11 +248,21 @@ private:
   callbacks_type callbacks_{};
 };
 
-int main() {
-  std::filesystem::path const ddir{"../../../data/"};
+std::filesystem::path const ddir{"../../../data/"};
 
+void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
+  png::write(ddir / filename, image.width(), image.height(), image.data());
+}
+
+int main() {
   mpb::builder builder{build_adapter{ddir / "seq"}};
-  auto result{builder.build()};
+  auto results{builder.build()};
+
+  std::size_t i{0};
+  for (auto& result : results) {
+    auto map{result.map([](auto c) noexcept { return native_to_blend(c); })};
+    write_rgb(std::format("art{}.png", i), map);
+  }
 
   return 0;
 }
