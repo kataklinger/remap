@@ -263,7 +263,7 @@ int main() {
   std::size_t i{0};
   for (auto& result : results) {
     auto map{result.map([](auto c) noexcept { return native_to_blend(c); })};
-    write_rgb(std::format("art{}.png", i), map);
+    write_rgb(std::format("art{}.png", ++i), map);
   }
 
   return 0;
