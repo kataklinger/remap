@@ -8,6 +8,7 @@ add_executable (remap
 	"src/all.hpp"
 	"src/cpl.hpp"
 	"src/mrl.hpp"
+	"src/sid.hpp"
 	"src/cdt.hpp"
 	"src/kpr.hpp"
 	"src/kpe.hpp"
@@ -27,8 +28,9 @@ add_executable (remap
 	"src/icd.hpp"
 	"src/nic.hpp"
 	"src/mpb.hpp"
+	"src/ful.hpp"
 	"src/pngu.hpp"
-	"src/main.cpp" "src/sid.hpp")
+	"src/main.cpp")
 
 target_link_libraries(remap PRIVATE png)
 target_compile_features(remap PUBLIC cxx_std_20)
