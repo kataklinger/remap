@@ -178,11 +178,13 @@ private:
   [[nodiscard]] bool extend(mrl::region_t& region,
                             point_t pos,
                             mrl::dimensions_t const& dim) noexcept {
+    auto extended{false};
+
     if (get<Idx>(pos) < get<Idx>(zero_)) {
       get<Idx>(region) = get_step<Idx>(get<Idx>(zero_) - get<Idx>(pos));
       get<Idx>(zero_) -= get<Idx>(region);
 
-      return true;
+      extended = true;
     }
 
     auto required{get<Idx>(pos) + static_cast<std::int32_t>(get<Idx>(dim))};
@@ -191,11 +193,11 @@ private:
           static_cast<std::size_t>(required) > limit) {
         get<Idx + 2>(region) = get_step<Idx>(required - limit);
 
-        return true;
+        extended = true;
       }
     }
 
-    return false;
+    return extended;
   }
 
   template<std::size_t Idx>
