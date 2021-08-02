@@ -6,8 +6,7 @@
 namespace nic {
 
 template<typename Alloc>
-[[nodiscard]] icd::compressed_t
-    compress(sid::nat::aimg_t<Alloc> const& image) {
+[[nodiscard]] icd::compressed_t compress(sid::nat::aimg_t<Alloc> const& image) {
   icd::compressed_t result{};
 
   std::vector<std::uint8_t> buffer{};
@@ -19,7 +18,7 @@ template<typename Alloc>
   buffer.push_back(current << 4);
 
   auto write_buf = [&](std::uint16_t len) {
-    if (len <= 64) {
+    if (len < 64) {
       result.push_back(0x80 | len);
     }
     else {
@@ -105,8 +104,8 @@ template<typename Alloc>
   return result;
 }
 
-[[nodiscard]] sid::nat::dimg_t
-    decompress(icd::compressed_t const& pack, mrl::dimensions_t const& dim) {
+[[nodiscard]] sid::nat::dimg_t decompress(icd::compressed_t const& pack,
+                                          mrl::dimensions_t const& dim) {
   sid::nat::dimg_t result{dim};
 
   auto out{result.data()};
