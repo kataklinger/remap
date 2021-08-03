@@ -3,12 +3,15 @@
 #include "mpb.hpp"
 #include "nic.hpp"
 
-#include "pngu.hpp"
+#include "ful.hpp"
+#include "nil.hpp"
 
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
+
+std::filesystem::path const ddir{"../../../data/"};
 
 using file_list = std::vector<std::filesystem::path>;
 
@@ -28,21 +31,12 @@ public:
   }
 
   template<typename Alloc>
-  [[nodiscard]] auto produce(Alloc alloc) {
+  [[nodiscard]] auto produce(Alloc const& alloc) {
     using image_type = sid::nat::aimg_t<Alloc>;
     using frame_type = ifd::frame<image_type>;
 
-    image_type temp{dimensions_, alloc};
-
-    std::ifstream input{*(next_++), std::ios::in | std::ios::binary};
-    if (!input.is_open()) {
-      return frame_type{frame_number(), temp};
-    }
-
-    input.read(reinterpret_cast<char*>(temp.data()), temp.dimensions().area());
-
-    return crop_ ? frame_type{frame_number(), temp.crop(*crop_)}
-                 : frame_type{frame_number(), temp};
+    auto temp{nil::read_raw(*(next_++), dimensions_, alloc)};
+    return frame_type{frame_number(), crop_ ? temp.crop(*crop_) : temp};
   }
 
 private:
@@ -250,13 +244,11 @@ private:
   callbacks_type callbacks_{};
 };
 
-std::filesystem::path const ddir{"../../../data/"};
-
 void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
   png::write(ddir / filename, image.width(), image.height(), image.data());
 }
 
-int main() {
+void build() {
   mpb::builder builder{build_adapter{ddir / "seq"}};
   auto results{builder.build()};
 
@@ -265,6 +257,10 @@ int main() {
     auto map{result.map([](auto c) noexcept { return native_to_blend(c); })};
     write_rgb(std::format("art{}.png", ++i), map);
   }
+}
+
+int main() {
+  build();
 
   return 0;
 }
