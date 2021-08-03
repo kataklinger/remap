@@ -1,5 +1,5 @@
 
-// color pallet library
+// color pallete library
 
 #pragma once
 
