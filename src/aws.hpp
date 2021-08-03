@@ -12,7 +12,6 @@
 namespace aws {
 
 using allocator_t = all::frame_allocator<cpl::nat_cc>;
-// using allocator_t = std::allocator<cpl::nat_cc>;
 
 using image_type = sid::nat::aimg_t<allocator_t>;
 using frame_type = ifd::frame<image_type>;

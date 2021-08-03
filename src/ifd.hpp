@@ -1,5 +1,5 @@
 
-// image feed definition
+// image feed definitions
 
 #pragma once
 
