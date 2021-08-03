@@ -28,6 +28,7 @@ add_executable (remap
 	"src/icd.hpp"
 	"src/nic.hpp"
 	"src/mpb.hpp"
+	"src/nil.hpp"
 	"src/ful.hpp"
 	"src/pngu.hpp"
 	"src/main.cpp")
