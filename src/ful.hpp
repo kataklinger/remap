@@ -11,8 +11,8 @@ namespace ful {
 template<typename Iter>
 void write(std::filesystem::path dir, Iter first, Iter last) {
   for (auto i{0}; first != last; ++first, ++i) {
-    std::fstream output;
-    output.open(dir / std::to_string(i), std::ios::out | std::ios::binary);
+    std::fstream output{dir / std::to_string(i),
+                        std::ios::out | std::ios::binary};
 
     auto dim{first->dots().dimensions()};
     output.write(reinterpret_cast<char const*>(&dim), sizeof(dim));
@@ -42,12 +42,10 @@ void write(std::filesystem::path dir, Iter first, Iter last) {
       output.write(reinterpret_cast<char const*>(frame.data_.median_.data()),
                    size_m);
     }
-
-    output.close();
   }
 }
 
-auto read(std::filesystem::path dir) {
+[[nodiscard]] auto read(std::filesystem::path dir) {
   using namespace std::filesystem;
 
   std::vector<std::filesystem::path> files;
@@ -59,8 +57,7 @@ auto read(std::filesystem::path dir) {
 
   std::vector<fgm::fragment> result;
   for (auto& file : files) {
-    std::ifstream input;
-    input.open(file, std::ios::in | std::ios::binary);
+    std::ifstream input{file, std::ios::in | std::ios::binary};
 
     mrl::dimensions_t dim{};
     input.read(reinterpret_cast<char*>(&dim), sizeof(mrl::dimensions_t));
@@ -96,8 +93,6 @@ auto read(std::filesystem::path dir) {
 
       frames.push_back(frame);
     }
-
-    input.close();
 
     result.emplace_back(
         std::move(temp), mrl::dimensions_t{1, 1}, zero, std::move(frames));
