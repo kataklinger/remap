@@ -69,6 +69,8 @@ public:
             sid::nat::aimg_t<Alloc1> const& image,
             sid::mon::aimg_t<Alloc2> const& mask,
             std::size_t frame_no) {
+    ensure(pos, image.dimensions());
+
     blit_impl(pos, image, [m = mask.data()](auto dst, auto src) mutable {
       if (value(*(m++)) == 0) {
         ++(*dst)[value(*src)];
@@ -182,7 +184,6 @@ private:
 
     if (get<Idx>(pos) < get<Idx>(zero_)) {
       get<Idx>(region) = get_step<Idx>(get<Idx>(zero_) - get<Idx>(pos));
-      get<Idx>(zero_) -= get<Idx>(region);
 
       extended = true;
     }
@@ -197,13 +198,16 @@ private:
       }
     }
 
+    get<Idx>(zero_) -= get<Idx>(region);
+
     return extended;
   }
 
   template<std::size_t Idx>
   [[nodiscard]] inline std::size_t get_step(std::size_t change) const noexcept {
     auto step{get<Idx>(step_)};
-    return (change / step) + (change % step != 0 ? step : 0);
+    auto rest{change % step};
+    return (change - rest) + (rest != 0 ? step : 0);
   }
 
 private:
