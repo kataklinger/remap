@@ -239,16 +239,16 @@ namespace details {
                         float total_count,
                         intersect_data intersect) noexcept
         : overlap_keypoints_count_{intersect.count_}
+        , match_keypoints_count_{match_count}
         , overlap_keypoints_rate_{intersect.count_ / total_count}
         , overlap_area_rate_{match_area / total_area}
-        , match_keypoints_rate_{match_count / intersect.count_}
         , match_keypoints_density_{match_count / match_area} {
     }
 
     std::size_t overlap_keypoints_count_;
+    float match_keypoints_count_;
 
     float overlap_keypoints_rate_;
-    float match_keypoints_rate_;
 
     float match_keypoints_density_;
 
@@ -257,15 +257,16 @@ namespace details {
 
   [[nodiscard]] bool is_overlapping(overlap_data const& fst,
                                     overlap_data const& snd) noexcept {
-    constexpr auto min_density{1.0f / (32 * 32)};
+    constexpr auto min_density{1.0f / (48 * 48)};
 
     auto overlap_rate{
         std::max(fst.overlap_keypoints_rate_, snd.overlap_keypoints_rate_)};
 
-    auto area_rate{std::max(fst.overlap_area_rate_, snd.overlap_area_rate_)};
+    auto area_rate{std::min(fst.overlap_area_rate_, snd.overlap_area_rate_)};
 
     auto match_rate{
-        std::max(fst.match_keypoints_rate_, snd.match_keypoints_rate_)};
+        (fst.match_keypoints_count_ + snd.match_keypoints_count_) /
+        (fst.overlap_keypoints_count_ + snd.overlap_keypoints_count_)};
 
     return area_rate >= 0.015f && fst.match_keypoints_density_ >= min_density &&
            match_rate >= 1 - 0.35f * std::hypotf(overlap_rate, 1 - area_rate);
