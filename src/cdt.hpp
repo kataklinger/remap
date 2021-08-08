@@ -267,8 +267,8 @@ struct region {
 
   [[nodiscard]] inline bool
       contains(point<value_type> const& point) const noexcept {
-    return point.x_ >= left_ && point.x_ <= right_ && point.y_ >= top_ &&
-           point.y_ <= bottom_;
+    return point.x_ >= left_ && point.x_ < right_ && point.y_ >= top_ &&
+           point.y_ < bottom_;
   }
 
   value_type left_{};
