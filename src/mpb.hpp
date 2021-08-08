@@ -56,23 +56,23 @@ private:
     collector.collect(feed, adapter_.get_compression(), cb());
     auto result{collector.complete()};
 
-    cb()(result);
+    cb()("frc", result);
     return result;
   }
 
   [[nodiscard]] inline auto splice(std::list<fgm::fragment>& fragments) {
     auto result{fgs::splice(fragments.begin(), fragments.end())};
 
-    cb()(result);
+    cb()("spl", result);
     return result;
   }
 
   [[nodiscard]] inline auto filter(mrl::dimensions_t const& window,
-                                   std::list<fgm::fragment>& fragments) {
+                                   std::vector<fgm::fragment>& fragments) {
     auto result{
         fdf::filter(fragments, window, adapter_.get_compression(), cb())};
 
-    cb()(result);
+    cb()("fdf", result);
     return result;
   }
 

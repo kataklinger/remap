@@ -178,11 +178,12 @@ struct mpb_callbacks {
   }
 
   inline void
-      operator()(std::list<fgm::fragment> const& fragments) const noexcept {
+      operator()(std::string const& tag,
+                 std::list<fgm::fragment> const& fragments) const noexcept {
   }
 
-  inline void
-      operator()(std::vector<fgm::fragment> const& fragments) const noexcept {
+  inline void operator()(std::string const& tag,
+                         std::vector<fgm::fragment> const& end) const noexcept {
   }
 };
 
