@@ -16,12 +16,66 @@ namespace details {
 
   using grid_t = kpr::grid<1, 1, std::allocator<char>>;
 
+  struct delta;
+  struct snippet;
+
+  using edges_t = std::list<delta>;
+  using snippet_iterator_t = std::list<snippet>::iterator;
+
   struct snippet {
-    fgm::fragment fragment_{};
+    [[nodiscard]] inline void bind(snippet_iterator_t self,
+                                   snippet_iterator_t other,
+                                   kpm::vote const& vote);
+
+    inline void unbind();
+
+    [[nodiscard]] inline edges_t::iterator
+        add(bool primary, kpm::vote const& vote, snippet_iterator_t other);
+
+    fgm::fragment fragment_;
     sid::mon::dimg_t mask_;
 
     grid_t grid_;
+
+    edges_t edges_;
   };
+
+  struct delta {
+    delta(bool primary, kpm::vote const& vote, snippet_iterator_t other)
+        : primary_{primary}
+        , vote_{primary ? vote : vote.reverse()}
+        , other_{other} {
+    }
+
+    bool primary_;
+
+    kpm::vote vote_;
+
+    snippet_iterator_t other_;
+    edges_t::iterator backlink_;
+  };
+
+  void snippet::bind(snippet_iterator_t self,
+                     snippet_iterator_t other,
+                     kpm::vote const& vote) {
+    auto e1{add(true, vote, other)};
+    auto e2{other->add(false, vote, self)};
+
+    e1->backlink_ = e2;
+    e2->backlink_ = e1;
+  }
+
+  void snippet::unbind() {
+    for (auto& edge : edges_) {
+      edge.other_->edges_.erase(edge.backlink_);
+    }
+  }
+
+  edges_t::iterator snippet::add(bool primary,
+                                 kpm::vote const& vote,
+                                 snippet_iterator_t other) {
+    return edges_.emplace(edges_.end(), primary, vote, other);
+  }
 
   [[nodiscard]] snippet extract_single(fgm::fragment&& fragment) {
     auto [image, mask]{fragment.blend()};
@@ -36,7 +90,7 @@ namespace details {
 
   template<typename Iter>
   [[nodiscard]] auto extract_all(Iter first, Iter last) {
-    std::vector<details::snippet> snippets{
+    std::list<details::snippet> snippets{
         static_cast<std::size_t>(std::distance(first, last)),
         details::snippet{}};
 
@@ -62,309 +116,79 @@ namespace details {
     [[no_unique_address]] allocator_type allocator_;
   };
 
-  using couple_t = std::pair<std::int16_t, std::int16_t>;
-
-  class delta {
-  public:
-    struct match_value {
-      std::uint8_t cross_;
-      std::size_t keypoints_;
-
-      friend auto operator<=>(match_value const&, match_value const&) = default;
-
-      inline explicit match_value(std::size_t raw) noexcept
-          : cross_{raw & 3}
-          , keypoints_{raw >> 2} {
-      }
-    };
-
-    struct match {
-      cdt::offset_t offset_;
-      match_value value_;
-
-      inline match(
-          std::pair<cdt::offset_t const, std::size_t> const& pair) noexcept
-          : offset_{std::get<0>(pair)}
-          , value_(std::get<1>(pair)) {
-      }
-    };
-
-    using total_t = kpm::totalizator_t<match_config>;
-
-  public:
-    inline explicit delta(couple_t couple) noexcept
-        : couple_{couple} {
-    }
-
-    inline void update_raw(kpm::ticket_t<match_config> const& ticket) noexcept {
-      for (auto& [offset, count] : ticket) {
-        matches_[offset] += (count << 2);
-      }
-    }
-
-    inline void crossmatch(cdt::offset_t const& offset) noexcept {
-      ++matches_[offset];
-    }
-
-    [[nodiscard]] inline couple_t couple() const noexcept {
-      return couple_;
-    }
-
-    template<typename Ty>
-    [[nodiscard]] inline auto
-        couple(std::vector<Ty> const& data) const noexcept {
-      auto [left, right]{couple_};
-      return std::tuple<Ty const&, Ty const&>{data[left], data[right]};
-    }
-
-    [[nodiscard]] inline total_t const& raw() const noexcept {
-      return matches_;
-    }
-
-    [[nodiscard]] inline std::optional<cdt::offset_t> offset() const noexcept {
-      if (matches_.empty()) {
-        return {};
-      }
-
-      auto best{std::max_element(
-          matches_.begin(), matches_.end(), [](auto& lhs, auto& rhs) {
-            return match_value{lhs.second} < match_value{rhs.second};
-          })};
-
-      return best->first;
-    }
-
-  private:
-    couple_t couple_;
-    total_t matches_;
-  };
-
-  [[nodiscard]] auto build_deltas(std::vector<snippet> const& snippets) {
-    std::vector<details::delta> deltas;
-
-    auto segments{snippets.size()};
-    deltas.reserve(segments * (segments - 1) / 2);
-
-    for (std::int16_t i{0}; i < segments; ++i) {
-      for (std::int16_t j{i + 1}; j < segments; ++j) {
-        deltas.emplace_back(couple_t{i, j});
-      }
-    }
-
-    return deltas;
-  }
-
-  void match_all(std::vector<snippet> const& snippets,
-                 std::vector<delta>& deltas) {
-    std::for_each(std::execution::par,
-                  deltas.begin(),
-                  deltas.end(),
-                  [&snippets](auto& d) {
-                    auto [left, right]{d.couple(snippets)};
-
-                    auto ticket{kpm::match(details::match_config{},
-                                           left.grid_[0],
-                                           left.mask_,
-                                           right.grid_[0],
-                                           right.mask_)};
-                    d.update_raw(ticket);
-                  });
-  }
-
-  void crossmatch_single(delta& pi, delta& pj, delta& pk) noexcept {
-    for (auto& [i, u1] : pi.raw()) {
-      auto& [ix, iy]{i};
-      for (auto& [j, u2] : pj.raw()) {
-        auto& [jx, jy]{j};
-        for (auto& [k, u3] : pk.raw()) {
-          auto& [kx, ky]{k};
-          if (ix == jx + kx && iy == jy + ky) {
-            pi.crossmatch(i);
-            pj.crossmatch(j);
-            pk.crossmatch(k);
-          }
-        }
+  template<typename It>
+  void match_partial(It head, It first, It last) {
+    for (; first != last; ++first) {
+      if (auto ticket{kpm::match(details::match_config{},
+                                 head->grid_[0],
+                                 head->mask_,
+                                 first->grid_[0],
+                                 first->mask_)};
+          !ticket.empty()) {
+        head->bind(head, first, ticket.front());
       }
     }
   }
 
-  void crossmatch_all(std::vector<delta>& deltas,
-                      std::size_t segments) noexcept {
-    for (auto i{deltas.begin()}; i < deltas.end(); ++i) {
-      auto [ix, iy]{i->couple()};
-
-      for (auto j{i + 1}; j < deltas.end(); ++j) {
-        if (auto [jx, jy]{j->couple()}; jx == ix) {
-          auto k{deltas[iy * (2 * segments - iy - 1) / 2 + jy - iy - 1]};
-
-          crossmatch_single(*i, *j, k);
-        }
-        else {
-          break;
-        }
-      }
+  template<typename It>
+  void match_all(It first, It last) {
+    for (auto rest{next(first)}; rest != last; ++first, ++rest) {
+      match_partial(first, rest, last);
     }
   }
-
-  template<typename Ty>
-  concept walker =
-      std::invocable<Ty> && std::invocable<Ty, std::uint16_t, cdt::offset_t>;
-
-  class graph {
-  private:
-    struct node;
-
-    struct edge {
-      std::uint16_t link_;
-      cdt::offset_t offset_;
-    };
-
-    struct node {
-      bool visited_;
-      std::vector<edge> edges_;
-    };
-
-    struct state {
-      std::uint16_t node_{};
-      std::uint16_t edge_{};
-      cdt::offset_t offset_{};
-    };
-
-    using history_t = std::stack<state>;
-
-  public:
-    graph(std::uint16_t size)
-        : nodes_{size, node{}} {
-    }
-
-    void add_edge(couple_t couple, cdt::offset_t const& offset) {
-      auto [idx, jdx]{couple};
-
-      nodes_[idx].edges_.emplace_back(jdx, offset);
-      nodes_[jdx].edges_.emplace_back(idx, -offset);
-    }
-
-    template<walker Walker>
-    void process(Walker& w) {
-      for (std::uint16_t i{0}; i < nodes_.size(); ++i) {
-        if (!nodes_[i].visited_) {
-          w();
-
-          walk({i, 0, {}}, w);
-        }
-      }
-    }
-
-  private:
-    template<walker Walker>
-    void walk(state active, Walker& w) {
-      for (history_t hist; true;) {
-        if (auto& current{nodes_[active.node_]}; current.visited_) {
-          if (!backtrack(active, hist)) {
-            break;
-          }
-        }
-        else {
-          current.visited_ = true;
-
-          w(active.node_, active.offset_);
-
-          if (active.edge_ < current.edges_.size()) {
-            hist.emplace(active.node_, active.edge_ + 1, active.offset_);
-            active = *advance(active, current);
-          }
-          else if (!backtrack(active, hist)) {
-            break;
-          }
-        }
-      }
-    }
-
-    [[nodiscard]] inline bool backtrack(state& active,
-                                        history_t& hist) noexcept {
-      while (!hist.empty()) {
-        auto next{advance(hist.top())};
-        hist.pop();
-
-        if (next) {
-          active = *next;
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    [[nodiscard]] inline std::optional<state>
-        advance(state const& s) const noexcept {
-      return advance(s, nodes_[s.node_]);
-    }
-
-    [[nodiscard]] inline std::optional<state>
-        advance(state const& s, node const& current) const noexcept {
-      if (s.edge_ < current.edges_.size()) {
-        auto& next{current.edges_[s.edge_]};
-        return std::optional<state>{
-            std::in_place, next.link_, s.edge_, s.offset_ + next.offset_};
-      }
-
-      return {};
-    }
-
-  private:
-    std::vector<node> nodes_;
-  };
-
-  class splicer {
-  public:
-    inline explicit splicer(std::vector<snippet>&& snippets) noexcept
-        : snippets_{std::move(snippets)} {
-    }
-
-    inline void operator()() {
-      result_.emplace_back();
-    }
-
-    inline void operator()(std::uint16_t snippet, cdt::offset_t offset) {
-      result_.back().blit(offset, std::move(snippets_[snippet].fragment_));
-    }
-
-    [[nodiscard]] inline std::list<fgm::fragment> get_result() noexcept {
-      return std::move(result_);
-    }
-
-  private:
-    std::vector<snippet> snippets_;
-    std::list<fgm::fragment> result_;
-  };
-
-  [[nodiscard]] graph build_graph(std::vector<delta> const& deltas,
-                                  std::uint16_t size) {
-    graph result{size};
-    for (auto& d : deltas) {
-      if (auto off{d.offset()}; off) {
-        result.add_edge(d.couple(), *off);
-      }
-    }
-
-    return result;
-  }
-
 } // namespace details
 
 template<typename Iter>
-[[nodiscard]] std::list<fgm::fragment> splice(Iter first, Iter last) {
+[[nodiscard]] std::vector<fgm::fragment> splice(Iter first, Iter last) {
   auto snippets{details::extract_all(first, last)};
-  auto deltas{details::build_deltas(snippets)};
-  auto size{snippets.size()};
+  details::match_all(snippets.begin(), snippets.end());
 
-  details::match_all(snippets, deltas);
-  details::crossmatch_all(deltas, size);
+  while (true) {
+    std::vector<std::tuple<details::snippet_iterator_t, details::delta*>>
+        deltas;
+    for (auto s{snippets.begin()}; s != snippets.end(); ++s) {
+      for (auto& e : s->edges_) {
+        if (e.primary_) {
+          deltas.emplace_back(s, &e);
+        }
+      }
+    }
 
-  details::splicer spliced{std::move(snippets)};
-  build_graph(deltas, size).process(spliced);
+    if (deltas.empty()) {
+      break;
+    }
 
-  return spliced.get_result();
+    auto& [left, edge]{*std::max_element(
+        deltas.begin(), deltas.end(), [](auto& lhs, auto& rhs) {
+          return std::get<1>(lhs)->vote_.count_ <
+                 std::get<1>(rhs)->vote_.count_;
+        })};
+
+    auto right{edge->other_};
+
+    auto& dst{left->fragment_};
+    dst.blit(dst.zero() + edge->vote_.offset_, std::move(right->fragment_));
+    snippets.emplace_front(details::extract_single(std::move(dst)));
+
+    right->unbind();
+    left->unbind();
+
+    snippets.erase(right);
+    snippets.erase(left);
+
+    details::match_partial(
+        snippets.begin(), std::next(snippets.begin()), snippets.end());
+  }
+
+  std::vector<fgm::fragment> result{};
+  result.reserve(snippets.size());
+
+  std::transform(snippets.begin(),
+                 snippets.end(),
+                 std::back_inserter(result),
+                 [](auto& s) { return std::move(s.fragment_); });
+
+  return result;
 }
 
 } // namespace fgs

@@ -19,7 +19,7 @@ struct background {
 namespace details {
 
   [[nodiscard]] inline std::vector<background>
-      get_background(std::list<fgm::fragment> const& fragments) {
+      get_background(std::vector<fgm::fragment> const& fragments) {
     std::vector<background> results{fragments.size()};
     std::transform(std::execution::par,
                    fragments.begin(),
@@ -39,7 +39,7 @@ using contours_t = fde::contours_t<std::allocator<cpl::nat_cc>>;
 
 template<typename Comp, typename Callback>
 [[nodiscard]] std::vector<fgm::fragment> filter(
-    std::list<fgm::fragment> const& fragments,
+    std::vector<fgm::fragment> const& fragments,
     std::vector<background> const& backgrounds,
     mrl::dimensions_t const& frame_dim,
     Comp&& comp,
@@ -76,7 +76,7 @@ template<typename Comp, typename Callback>
 
 template<typename Comp, typename Callback>
 [[nodiscard]] inline std::vector<fgm::fragment> filter(
-    std::list<fgm::fragment> const& fragments,
+    std::vector<fgm::fragment> const& fragments,
     mrl::dimensions_t const& frame_dim,
     Comp&& comp,
     Callback&& cb) requires(icd::decompressor<std::decay_t<Comp>,

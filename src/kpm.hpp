@@ -37,7 +37,12 @@ struct vote {
 
   inline vote() noexcept = default;
 
-  inline vote(pair_t const& pair) noexcept
+  inline vote(cdt::offset_t const& offset, std::size_t count) noexcept
+      : offset_{offset}
+      , count_{count} {
+  }
+
+  inline explicit vote(pair_t const& pair) noexcept
       : offset_{std::get<0>(pair)}
       , count_{std::get<1>(pair)} {
   }
@@ -47,6 +52,10 @@ struct vote {
     count_ = std::get<1>(pair);
 
     return *this;
+  }
+
+  [[nodiscard]] inline vote reverse() const noexcept {
+    return {-offset_, count_};
   }
 
   cdt::offset_t offset_{};
