@@ -23,13 +23,13 @@ namespace details {
   using snippet_iterator_t = std::list<snippet>::iterator;
 
   struct snippet {
-    [[nodiscard]] inline void bind(snippet_iterator_t self,
-                                   snippet_iterator_t other,
-                                   kpm::vote const& vote);
+    [[nodiscard]] void bind(snippet_iterator_t self,
+                            snippet_iterator_t other,
+                            kpm::vote const& vote);
 
-    inline void unbind();
+    void unbind();
 
-    [[nodiscard]] inline edges_t::iterator
+    [[nodiscard]] edges_t::iterator
         add(bool primary, kpm::vote const& vote, snippet_iterator_t other);
 
     fgm::fragment fragment_;
@@ -55,25 +55,25 @@ namespace details {
     edges_t::iterator backlink_;
   };
 
-  void snippet::bind(snippet_iterator_t self,
-                     snippet_iterator_t other,
-                     kpm::vote const& vote) {
-    auto e1{add(true, vote, other)};
-    auto e2{other->add(false, vote, self)};
+  inline void snippet::bind(snippet_iterator_t self,
+                            snippet_iterator_t other,
+                            kpm::vote const& vote) {
+    auto edge1{add(true, vote, other)};
+    auto edge2{other->add(false, vote, self)};
 
-    e1->backlink_ = e2;
-    e2->backlink_ = e1;
+    edge1->backlink_ = edge2;
+    edge2->backlink_ = edge1;
   }
 
-  void snippet::unbind() {
+  inline void snippet::unbind() {
     for (auto& edge : edges_) {
       edge.other_->edges_.erase(edge.backlink_);
     }
   }
 
-  edges_t::iterator snippet::add(bool primary,
-                                 kpm::vote const& vote,
-                                 snippet_iterator_t other) {
+  inline edges_t::iterator snippet::add(bool primary,
+                                        kpm::vote const& vote,
+                                        snippet_iterator_t other) {
     return edges_.emplace(edges_.end(), primary, vote, other);
   }
 
@@ -136,39 +136,38 @@ namespace details {
       match_partial(first, rest, last);
     }
   }
-} // namespace details
 
-template<typename Iter>
-[[nodiscard]] std::vector<fgm::fragment> splice(Iter first, Iter last) {
-  auto snippets{details::extract_all(first, last)};
-  details::match_all(snippets.begin(), snippets.end());
+  [[nodiscard]] auto select_match(std::list<snippet>& snippets) {
+    using item_t = std::tuple<snippet_iterator_t, delta*>;
+    using result_t = std::optional<item_t>;
 
-  while (true) {
-    std::vector<std::tuple<details::snippet_iterator_t, details::delta*>>
-        deltas;
-    for (auto s{snippets.begin()}; s != snippets.end(); ++s) {
-      for (auto& e : s->edges_) {
-        if (e.primary_) {
-          deltas.emplace_back(s, &e);
+    std::vector<item_t> matches;
+    for (auto it{snippets.begin()}; it != snippets.end(); ++it) {
+      for (auto& edge : it->edges_) {
+        if (edge.primary_) {
+          matches.emplace_back(it, &edge);
         }
       }
     }
 
-    if (deltas.empty()) {
-      break;
+    if (!matches.empty()) {
+      return result_t{*max_element(
+          matches.begin(), matches.end(), [](auto& lhs, auto& rhs) {
+            return get<1>(lhs)->vote_.count_ < get<1>(rhs)->vote_.count_;
+          })};
     }
 
-    auto& [left, edge]{*std::max_element(
-        deltas.begin(), deltas.end(), [](auto& lhs, auto& rhs) {
-          return std::get<1>(lhs)->vote_.count_ <
-                 std::get<1>(rhs)->vote_.count_;
-        })};
+    return result_t{};
+  }
 
+  void splice_single(std::list<snippet>& snippets,
+                     snippet_iterator_t left,
+                     delta* edge) {
     auto right{edge->other_};
 
     auto& dst{left->fragment_};
     dst.blit(dst.zero() + edge->vote_.offset_, std::move(right->fragment_));
-    snippets.emplace_front(details::extract_single(std::move(dst)));
+    snippets.emplace_front(extract_single(std::move(dst)));
 
     right->unbind();
     left->unbind();
@@ -176,17 +175,35 @@ template<typename Iter>
     snippets.erase(right);
     snippets.erase(left);
 
-    details::match_partial(
-        snippets.begin(), std::next(snippets.begin()), snippets.end());
+    match_partial(snippets.begin(), next(snippets.begin()), snippets.end());
+  }
+
+} // namespace details
+
+template<typename Iter>
+[[nodiscard]] std::vector<fgm::fragment> splice(Iter first, Iter last) {
+  using namespace details;
+
+  auto snippets{extract_all(first, last)};
+  match_all(snippets.begin(), snippets.end());
+
+  while (true) {
+    auto match{select_match(snippets)};
+    if (!match) {
+      break;
+    }
+
+    auto& [left, edge]{*match};
+    splice_single(snippets, left, edge);
   }
 
   std::vector<fgm::fragment> result{};
   result.reserve(snippets.size());
 
-  std::transform(snippets.begin(),
-                 snippets.end(),
-                 std::back_inserter(result),
-                 [](auto& s) { return std::move(s.fragment_); });
+  transform(snippets.begin(),
+            snippets.end(),
+            back_inserter(result),
+            [](auto& s) { return std::move(s.fragment_); });
 
   return result;
 }
