@@ -171,6 +171,19 @@ namespace details {
     return total;
   }
 
+  template<typename Alloc, std::size_t Width, std::size_t Height>
+  [[nodiscard]] inline std::size_t
+      get_active(kpr::grid<Width, Height, Alloc> const& grid) noexcept {
+    std::size_t count{0};
+    for (auto& region : grid.regions()) {
+      if (region.is_active()) {
+        ++count;
+      }
+    }
+
+    return count;
+  }
+
   template<match_config Cfg>
   [[nodiscard]] std::optional<cdt::offset_t> declare(ticket_t<Cfg> const& top,
                                                      std::size_t region_count) {
@@ -332,8 +345,12 @@ template<match_config Cfg,
           kpr::grid<Width, Height, Alloc> const& previous,
           kpr::grid<Width, Height, Alloc> const& current) {
   using namespace details;
-
   using grid_t = kpr::grid<Width, Height, Alloc>;
+
+  auto active{get_active(current)};
+  if (active < grid_t::region_count / 4) {
+    return {};
+  }
 
   collector_t<Cfg> tickets{config.get_allocator()};
   tickets.reserve(grid_t::region_count);
@@ -344,8 +361,7 @@ template<match_config Cfg,
     tickets.push_back(cast_vote(config, prev_regs[i], curr_regs[i]));
   }
 
-  return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2),
-                      grid_t::region_count);
+  return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2), active);
 }
 
 } // namespace kpm

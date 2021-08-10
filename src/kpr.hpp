@@ -140,6 +140,12 @@ public:
         weight_count_.begin(), weight_count_.end(), std::size_t{});
   }
 
+  [[nodiscard]] inline bool is_active() const noexcept {
+    return std::any_of(weight_count_.begin(),
+                       weight_count_.end(),
+                       [](std::size_t count) { return count != 0; });
+  }
+
 private:
   points_store points_;
   count_store weight_count_{};
