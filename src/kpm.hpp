@@ -333,19 +333,19 @@ template<match_config Cfg,
           kpr::grid<Width, Height, Alloc> const& current) {
   using namespace details;
 
-  using gird_t = kpr::grid<Width, Height, Alloc>;
+  using grid_t = kpr::grid<Width, Height, Alloc>;
 
   collector_t<Cfg> tickets{config.get_allocator()};
-  tickets.reserve(gird_t::region_count);
+  tickets.reserve(grid_t::region_count);
 
   auto prev_regs{previous.regions()}, curr_regs{current.regions()};
 
-  for (std::size_t i{0}; i < gird_t::region_count; ++i) {
+  for (std::size_t i{0}; i < grid_t::region_count; ++i) {
     tickets.push_back(cast_vote(config, prev_regs[i], curr_regs[i]));
   }
 
   return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2),
-                      gird_t::region_count);
+                      grid_t::region_count);
 }
 
 } // namespace kpm
