@@ -130,6 +130,14 @@ public:
     return {std::move(image), std::move(mask)};
   }
 
+  void normalize() noexcept {
+    for (auto& frame : frames_) {
+      frame.position_ -= zero_;
+    }
+
+    zero_ = {0, 0};
+  }
+
   [[nodiscard]] inline matrix_type const& dots() const noexcept {
     return dots_;
   }

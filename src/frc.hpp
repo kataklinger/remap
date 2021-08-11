@@ -72,6 +72,10 @@ public:
   }
 
   [[nodiscard]] inline std::list<fgm::fragment> complete() noexcept {
+    for (auto& fragment : fragments_) {
+      fragment.normalize();
+    }
+
     return std::move(fragments_);
   }
 
