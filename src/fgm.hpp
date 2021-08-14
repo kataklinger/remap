@@ -13,6 +13,10 @@ inline constexpr std::uint8_t depth{16};
 
 using dot_type = std::array<std::uint16_t, depth>;
 
+[[nodiscard]] inline bool is_empty(dot_type const& dot) noexcept {
+  return std::all_of(begin(dot), end(dot), [](auto v) { return v == 0; });
+}
+
 using point_t = cdt::point<std::int32_t>;
 
 struct fragment_blend {
@@ -138,6 +142,16 @@ public:
     zero_ = {0, 0};
   }
 
+  [[nodiscard]] mrl::region_t margins() const noexcept {
+    mrl::region_t region{
+        dots_.width(), dots_.height(), dots_.width(), dots_.height()};
+
+    hor_margins(region);
+    ver_margins(region);
+
+    return region;
+  }
+
   [[nodiscard]] inline matrix_type const& dots() const noexcept {
     return dots_;
   }
@@ -216,6 +230,68 @@ private:
     auto step{get<Idx>(step_)};
     auto rest{change % step};
     return (change - rest) + (rest != 0 ? step : 0);
+  }
+
+  void hor_margins(mrl::region_t& region) const noexcept {
+    auto width{dots_.width()};
+
+    for (auto row{dots_.data()}, rend{dots_.end()}; row < rend; row += width) {
+      std::size_t x{};
+      for (auto col{row}, cend{row + width}; col < cend; ++col, ++x) {
+        if (!is_empty(*col)) {
+          if (x < region.left_) {
+            region.left_ = x;
+          }
+
+          break;
+        }
+      }
+
+      x = 0;
+      for (auto col{row + width - 1}; col >= row; --col, ++x) {
+        if (!is_empty(*col)) {
+          if (x < region.right_) {
+            region.right_ = x;
+          }
+
+          break;
+        }
+      }
+    }
+  }
+
+  void ver_margins(mrl::region_t& region) const noexcept {
+    auto width{dots_.width()};
+    auto height{dots_.width()};
+    auto size{dots_.size()};
+
+    auto end{dots_.end()};
+
+    for (auto col{dots_.data()}, cend{dots_.data() + width}, rend{dots_.end()};
+         col < cend;
+         ++col) {
+      std::size_t y{};
+      for (auto row{col}; row < end; row += width, ++y) {
+        if (!is_empty(*row)) {
+          if (y < region.top_) {
+            region.top_ = y;
+          }
+
+          break;
+        }
+      }
+
+      y = 0;
+      for (auto row{col + size - width}; row >= col; row -= width, ++y) {
+        if (!is_empty(*row)) {
+          if (y < region.bottom_) {
+            region.bottom_ = y;
+          }
+
+          break;
+        }
+      }
+    }
   }
 
 private:
