@@ -313,12 +313,14 @@ template<typename Callback, std::uint8_t Size>
            Callback&& cb,
            float dev,
            std::integral_constant<std::uint8_t, Size> /*unused*/) {
+  auto margins{fragment.margins()};
+
   auto heatmap{details::generate_heatmap<Size>(fragment.blend())};
   auto result{details::blur(fragment.dots(), heatmap, dev)};
 
   cb(result, heatmap);
 
-  return result;
+  return result.crop(margins);
 }
 
 } // namespace arf
