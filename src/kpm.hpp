@@ -85,6 +85,7 @@ using cellular_totalizator_t = std::unordered_map<
 using cell_size_t = cdt::dimensions<std::uint8_t>;
 
 namespace details {
+
   template<match_config Cfg>
   using collector_t =
       std::vector<ticket_t<Cfg>, get_allocator<Cfg, ticket_t<Cfg>>>;
