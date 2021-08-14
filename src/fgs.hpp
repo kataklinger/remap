@@ -167,6 +167,8 @@ namespace details {
 
     auto& dst{left->fragment_};
     dst.blit(dst.zero() + edge->vote_.offset_, std::move(right->fragment_));
+    dst.normalize();
+
     snippets.emplace_front(extract_single(std::move(dst)));
 
     right->unbind();
