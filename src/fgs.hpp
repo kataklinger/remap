@@ -119,13 +119,13 @@ namespace details {
   template<typename It>
   void match_partial(It head, It first, It last) {
     for (; first != last; ++first) {
-      if (auto ticket{kpm::match(details::match_config{},
-                                 head->grid_[0],
-                                 head->mask_,
-                                 first->grid_[0],
-                                 first->mask_)};
-          !ticket.empty()) {
-        head->bind(head, first, ticket.front());
+      if (auto vote{kpm::match(details::match_config{},
+                               head->grid_[0],
+                               head->mask_,
+                               first->grid_[0],
+                               first->mask_)};
+          vote) {
+        head->bind(head, first, *vote);
       }
     }
   }

@@ -11,8 +11,10 @@
 #include <array>
 #include <concepts>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace kpm {
@@ -71,6 +73,16 @@ using totalizator_t = std::unordered_map<cdt::offset_t,
                                          cdt::offset_hash,
                                          std::equal_to<cdt::offset_t>,
                                          get_allocator<Cfg, vote::pair_t>>;
+
+template<match_config Cfg>
+using cellular_totalizator_t = std::unordered_map<
+    cdt::offset_t,
+    totalizator_t<Cfg>,
+    cdt::offset_hash,
+    std::equal_to<cdt::offset_t>,
+    get_allocator<Cfg, std::pair<cdt::offset_t const, totalizator_t<Cfg>>>>;
+
+using cell_size_t = cdt::dimensions<std::uint8_t>;
 
 namespace details {
   template<match_config Cfg>
@@ -210,31 +222,80 @@ namespace details {
                : cast_vote_impl(config, previous, current, std::false_type{});
   }
 
-  struct intersect_data {
-    std::size_t count_;
-    float rate_;
-  };
+  [[nodiscard]] inline std::int32_t to_cell(std::int32_t pval,
+                                            std::int32_t cval,
+                                            std::uint8_t size) noexcept {
+    return std::min(pval, cval) / size;
+  }
 
-  template<typename Region>
-  [[nodiscard]] intersect_data filter_keypoints(Region const& region,
-                                                sid::mon::dimg_t const& mask,
-                                                cdt::offset_t delta,
-                                                mrl::region_t limits) noexcept {
-    std::size_t count{};
+  template<typename Total, typename Points>
+  void get_offsets(Points const& previous,
+                   Points const& current,
+                   Total& total,
+                   cell_size_t const& cell_size) {
+    auto& [dx, dy]{cell_size};
 
-    for (auto const& [c, group] : region.points()) {
-      for (auto point : group) {
-        if (limits.contains(point)) {
-          if (auto idx{to_index(static_cast<cdt::offset_t>(point) + delta,
-                                mask.dimensions())};
-              value(mask.data()[idx]) != 0) {
-            ++count;
-          }
-        }
+    for (auto& [px, py] : previous) {
+      for (auto& [cx, cy] : current) {
+        auto ox{static_cast<std::int32_t>(px) - static_cast<std::int32_t>(cx)};
+        auto oy{static_cast<std::int32_t>(py) - static_cast<std::int32_t>(cy)};
+
+        auto [it, added]{total.try_emplace({ox, oy}, total.get_allocator())};
+        ++(it->second)[{to_cell(px, cx, dx), to_cell(py, cy, dy)}];
+      }
+    }
+  }
+
+  template<match_config Cfg, typename Region>
+  [[nodiscard]] cellular_totalizator_t<Cfg>
+      count_offsets(Cfg const& config,
+                    Region const& previous,
+                    Region const& current,
+                    cell_size_t const& cell_size) {
+    cellular_totalizator_t<Cfg> total{config.get_allocator()};
+
+    auto& prev_group{previous.points()};
+    for (auto& [key, curr] : current.points()) {
+      if (auto it = prev_group.find(key); it != prev_group.end()) {
+        get_offsets(it->second, curr, total, cell_size);
       }
     }
 
-    return {count, static_cast<float>(count) / region.total_count()};
+    return total;
+  }
+
+  struct best_offset {
+    cdt::offset_t offset_;
+    std::size_t matched_cells_;
+    std::size_t matched_keypoints_;
+
+    [[nodiscard]] inline vote as_vote() const noexcept {
+      return {offset_, matched_keypoints_};
+    }
+
+    friend auto operator<=>(best_offset const& lhs,
+                            best_offset const& rhs) noexcept {
+      return lhs.matched_keypoints_ <=> rhs.matched_keypoints_;
+    }
+  };
+
+  template<match_config Cfg>
+  [[nodiscard]] best_offset
+      find_best(cellular_totalizator_t<Cfg> const& offsets) {
+    std::vector<best_offset> scores{offsets.get_allocator()};
+    transform(
+        begin(offsets), end(offsets), back_inserter(scores), [](auto& item) {
+          return best_offset{item.first,
+                             item.second.size(),
+                             accumulate(begin(item.second),
+                                        end(item.second),
+                                        std::size_t{},
+                                        [](auto const& total, auto& value) {
+                                          return total + get<1>(value);
+                                        })};
+        });
+
+    return *max_element(begin(scores), end(scores));
   }
 
   using intersect_span = std::pair<mrl::limits_t, mrl::limits_t>;
@@ -254,86 +315,84 @@ namespace details {
                           {0, std::min(current, previous - delta)}};
   }
 
-  struct overlap_data {
-    inline overlap_data(float match_area,
-                        float total_area,
-                        float match_count,
-                        float total_count,
-                        intersect_data intersect) noexcept
-        : overlap_keypoints_count_{intersect.count_}
-        , match_keypoints_count_{match_count}
-        , overlap_keypoints_rate_{intersect.count_ / total_count}
-        , overlap_area_rate_{match_area / total_area}
-        , match_keypoints_density_{match_count / match_area} {
+  template<typename Region>
+  [[nodiscard]] std::size_t
+      filter_keypoints(Region const& region,
+                       sid::mon::dimg_t const& mask,
+                       cdt::offset_t delta,
+                       mrl::region_t limits,
+                       cell_size_t const& cell_size) noexcept {
+    std::unordered_set<
+        cdt::offset_t,
+        cdt::offset_hash,
+        std::equal_to<cdt::offset_t>,
+        all::rebind_alloc_t<typename Region::allocator_type, cdt::offset_t>>
+        cells{region.get_allocator()};
+
+    auto& [cx, cy]{cell_size};
+    for (auto const& [key, group] : region.points()) {
+      for (auto point : group) {
+        if (limits.contains(point)) {
+          if (auto idx{to_index(static_cast<cdt::offset_t>(point) + delta,
+                                mask.dimensions())};
+              value(mask.data()[idx]) != 0) {
+            auto ox{static_cast<std::int32_t>(point.x_ - limits.left_) / cx};
+            auto oy{static_cast<std::int32_t>(point.y_ - limits.top_) / cy};
+
+            cells.emplace(ox * cx, oy * cy);
+          }
+        }
+      }
     }
 
-    std::size_t overlap_keypoints_count_;
-    float match_keypoints_count_;
+    return cells.size();
+  }
 
-    float overlap_keypoints_rate_;
+  template<typename Region>
+  [[nodiscard]] std::size_t count_active_cells(Region const& preg,
+                                               sid::mon::dimg_t const& pmask,
+                                               Region const& creg,
+                                               sid::mon::dimg_t const& cmask,
+                                               cdt::offset_t const& offset,
+                                               cell_size_t const& cell_size) {
+    auto& [x, y]{offset};
 
-    float match_keypoints_density_;
+    auto &pdim{pmask.dimensions()}, &cdim{cmask.dimensions()};
+    auto hor{get_limits(x, pdim.width_, cdim.width_)},
+        ver{get_limits(y, pdim.height_, cdim.height_)};
 
-    float overlap_area_rate_;
-  };
+    auto plim{from_limits(hor.first, ver.first)},
+        clim{from_limits(hor.second, ver.second)};
 
-  [[nodiscard]] bool is_overlapping(overlap_data const& fst,
-                                    overlap_data const& snd) noexcept {
-    constexpr auto min_density{1.0f / (48 * 48)};
-
-    auto overlap_rate{
-        std::max(fst.overlap_keypoints_rate_, snd.overlap_keypoints_rate_)};
-
-    auto area_rate{std::min(fst.overlap_area_rate_, snd.overlap_area_rate_)};
-
-    auto match_rate{
-        (fst.match_keypoints_count_ + snd.match_keypoints_count_) /
-        (fst.overlap_keypoints_count_ + snd.overlap_keypoints_count_)};
-
-    return area_rate >= 0.015f && fst.match_keypoints_density_ >= min_density &&
-           match_rate >= 1 - 0.35f * std::hypotf(overlap_rate, 1 - area_rate);
+    return filter_keypoints(creg, pmask, offset, clim, cell_size);
   }
 
 } // namespace details
 
 template<match_config Cfg, typename Region>
-[[nodiscard]] inline ticket_t<Cfg> match(Cfg const& config,
-                                         Region const& preg,
-                                         sid::mon::dimg_t const& pmask,
-                                         Region const& creg,
-                                         sid::mon::dimg_t const& cmask) {
+[[nodiscard]] inline std::optional<vote> match(Cfg const& config,
+                                               Region const& preg,
+                                               sid::mon::dimg_t const& pmask,
+                                               Region const& creg,
+                                               sid::mon::dimg_t const& cmask) {
   using namespace details;
 
-  auto ticket{cast_vote(config, preg, creg)};
+  constexpr cell_size_t cell_size{15, 15};
 
-  auto it{std::remove_if(ticket.begin(), ticket.end(), [&](auto const& v) {
-    auto &pdim{pmask.dimensions()}, &cdim{cmask.dimensions()};
+  auto offsets{count_offsets(config, preg, creg, cell_size)};
+  if (offsets.empty()) {
+    return {};
+  }
 
-    auto hor{get_limits(v.offset_.x_, pdim.width_, cdim.width_)},
-        ver{get_limits(v.offset_.y_, pdim.height_, cdim.height_)};
+  auto best{find_best<Cfg>(offsets)};
 
-    auto plim{from_limits(hor.first, ver.first)},
-        clim{from_limits(hor.second, ver.second)};
+  auto active{
+      count_active_cells(preg, pmask, creg, cmask, best.offset_, cell_size)};
+  if (best.matched_cells_ < active * 0.66f) {
+    return {};
+  }
 
-    details::overlap_data pover(
-        plim.area(),
-        pmask.dimensions().area(),
-        v.count_,
-        preg.total_count(),
-        filter_keypoints(preg, cmask, -v.offset_, plim));
-
-    details::overlap_data cover(clim.area(),
-                                cmask.dimensions().area(),
-                                v.count_,
-                                creg.total_count(),
-                                filter_keypoints(creg, pmask, v.offset_, clim));
-
-    return !details::is_overlapping(pover, cover);
-  })};
-
-  ticket.erase(it, ticket.end());
-
-  return ticket;
+  return best.as_vote();
 }
 
 template<match_config Cfg,

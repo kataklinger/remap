@@ -146,6 +146,10 @@ public:
                        [](std::size_t count) { return count != 0; });
   }
 
+  [[nodiscard]] inline allocator_type get_allocator() const noexcept {
+    return points_.get_allocator();
+  }
+
 private:
   points_store points_;
   count_store weight_count_{};
