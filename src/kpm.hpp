@@ -31,8 +31,8 @@ concept match_config = requires(Ty cfg) {
   { cfg.get_allocator() } -> std::convertible_to<typename Ty::allocator_type>;
 };
 
-template<match_config Cfg, typename Ty>
-using get_allocator = all::rebind_alloc_t<typename Cfg::allocator_type, Ty>;
+template<match_config Cfg>
+using config_alloc_t = typename Cfg::allocator_type;
 
 struct vote {
   using pair_t = std::pair<cdt::offset_t const, std::size_t>;
@@ -64,31 +64,29 @@ struct vote {
   std::size_t count_{};
 };
 
-template<match_config Cfg>
-using ticket_t = std::vector<vote, get_allocator<Cfg, vote>>;
+template<typename Alloc>
+using ticket_t = std::vector<vote, all::rebind_alloc_t<Alloc, vote>>;
 
-template<match_config Cfg>
-using totalizator_t = std::unordered_map<cdt::offset_t,
-                                         std::size_t,
-                                         cdt::offset_hash,
-                                         std::equal_to<cdt::offset_t>,
-                                         get_allocator<Cfg, vote::pair_t>>;
+template<typename Alloc>
+using totalizator_t =
+    std::unordered_map<cdt::offset_t,
+                       std::size_t,
+                       cdt::offset_hash,
+                       std::equal_to<cdt::offset_t>,
+                       all::rebind_alloc_t<Alloc, vote::pair_t>>;
 
-template<match_config Cfg>
-using cellular_totalizator_t = std::unordered_map<
-    cdt::offset_t,
-    totalizator_t<Cfg>,
-    cdt::offset_hash,
-    std::equal_to<cdt::offset_t>,
-    get_allocator<Cfg, std::pair<cdt::offset_t const, totalizator_t<Cfg>>>>;
+using cellular_totalizator_t =
+    std::unordered_map<cdt::offset_t,
+                       totalizator_t<std::allocator<char>>,
+                       cdt::offset_hash>;
 
 using cell_size_t = cdt::dimensions<std::uint8_t>;
 
 namespace details {
 
-  template<match_config Cfg>
+  template<typename Alloc>
   using collector_t =
-      std::vector<ticket_t<Cfg>, get_allocator<Cfg, ticket_t<Cfg>>>;
+      std::vector<ticket_t<Alloc>, all::rebind_alloc_t<Alloc, ticket_t<Alloc>>>;
 
   template<typename Total, typename Points>
   void
@@ -105,10 +103,10 @@ namespace details {
   }
 
   template<bool Switch, match_config Cfg, typename Region>
-  [[nodiscard]] totalizator_t<Cfg> count_offsets(Cfg const& config,
-                                                 Region const& previous,
-                                                 Region const& current) {
-    totalizator_t<Cfg> total{config.get_allocator()};
+  [[nodiscard]] auto count_offsets(Cfg const& config,
+                                   Region const& previous,
+                                   Region const& current) {
+    totalizator_t<config_alloc_t<Cfg>> total{config.get_allocator()};
 
     auto& prev_group{previous.points()};
     for (auto& [key, curr] : current.points()) {
@@ -127,10 +125,11 @@ namespace details {
   }
 
   template<match_config Cfg>
-  [[nodiscard]] ticket_t<Cfg> top_offsets(Cfg const& config,
-                                          totalizator_t<Cfg> const& total,
-                                          std::size_t top) {
-    ticket_t<Cfg> selected{top + 1, config.get_allocator()};
+  [[nodiscard]] auto
+      top_offsets(Cfg const& config,
+                  totalizator_t<config_alloc_t<Cfg>> const& total,
+                  std::size_t top) {
+    ticket_t<config_alloc_t<Cfg>> selected{top + 1, config.get_allocator()};
 
     for (auto& added : total) {
       auto i{top};
@@ -160,7 +159,7 @@ namespace details {
   }
 
   template<match_config Cfg, typename Region, bool Switch>
-  [[nodiscard]] inline ticket_t<Cfg>
+  [[nodiscard]] inline auto
       cast_vote_impl(Cfg const& config,
                      Region const& previous,
                      Region const& current,
@@ -171,8 +170,8 @@ namespace details {
   }
 
   template<match_config Cfg>
-  [[nodiscard]] totalizator_t<Cfg> count(collector_t<Cfg> const& tickets) {
-    totalizator_t<Cfg> total{tickets.get_allocator()};
+  [[nodiscard]] auto count(collector_t<config_alloc_t<Cfg>> const& tickets) {
+    totalizator_t<config_alloc_t<Cfg>> total{tickets.get_allocator()};
 
     for (auto& ticket : tickets) {
       auto rank{Cfg::region_votes};
@@ -197,8 +196,8 @@ namespace details {
     return count;
   }
 
-  template<match_config Cfg>
-  [[nodiscard]] std::optional<cdt::offset_t> declare(ticket_t<Cfg> const& top,
+  template<typename Tickets>
+  [[nodiscard]] std::optional<cdt::offset_t> declare(Tickets const& top,
                                                      std::size_t region_count) {
     if (top.empty()) {
       return {};
@@ -212,9 +211,9 @@ namespace details {
   }
 
   template<match_config Cfg, typename Region>
-  [[nodiscard]] inline ticket_t<Cfg> cast_vote(Cfg const& config,
-                                               Region const& previous,
-                                               Region const& current) {
+  [[nodiscard]] inline auto cast_vote(Cfg const& config,
+                                      Region const& previous,
+                                      Region const& current) {
     constexpr auto idx{Region::max_weight - 1};
 
     return previous.counts()[idx] < Cfg::weight_switch ||
@@ -247,13 +246,12 @@ namespace details {
     }
   }
 
-  template<match_config Cfg, typename Region>
-  [[nodiscard]] cellular_totalizator_t<Cfg>
-      count_offsets(Cfg const& config,
-                    Region const& previous,
+  template<typename Region>
+  [[nodiscard]] cellular_totalizator_t
+      count_offsets(Region const& previous,
                     Region const& current,
                     cell_size_t const& cell_size) {
-    cellular_totalizator_t<Cfg> total{config.get_allocator()};
+    cellular_totalizator_t total;
 
     auto& prev_group{previous.points()};
     for (auto& [key, curr] : current.points()) {
@@ -280,10 +278,10 @@ namespace details {
     }
   };
 
-  template<match_config Cfg>
-  [[nodiscard]] best_offset
-      find_best(cellular_totalizator_t<Cfg> const& offsets) {
-    std::vector<best_offset> scores{offsets.get_allocator()};
+  [[nodiscard]] best_offset find_best(cellular_totalizator_t const& offsets) {
+    std::vector<best_offset> scores;
+    scores.reserve(offsets.size());
+
     transform(
         begin(offsets), end(offsets), back_inserter(scores), [](auto& item) {
           return best_offset{item.first,
@@ -370,22 +368,20 @@ namespace details {
 
 } // namespace details
 
-template<match_config Cfg, typename Region>
-[[nodiscard]] inline std::optional<vote> match(Cfg const& config,
-                                               Region const& preg,
+template<typename Region>
+[[nodiscard]] inline std::optional<vote> match(Region const& preg,
                                                sid::mon::dimg_t const& pmask,
                                                Region const& creg,
-                                               sid::mon::dimg_t const& cmask) {
+                                               sid::mon::dimg_t const& cmask,
+                                               cell_size_t const& cell_size) {
   using namespace details;
 
-  constexpr cell_size_t cell_size{15, 15};
-
-  auto offsets{count_offsets(config, preg, creg, cell_size)};
+  auto offsets{count_offsets(preg, creg, cell_size)};
   if (offsets.empty()) {
     return {};
   }
 
-  auto best{find_best<Cfg>(offsets)};
+  auto best{find_best(offsets)};
 
   auto active{
       count_active_cells(preg, pmask, creg, cmask, best.offset_, cell_size)};
@@ -396,32 +392,26 @@ template<match_config Cfg, typename Region>
   return best.as_vote();
 }
 
-template<match_config Cfg,
-         typename Alloc,
-         std::size_t Width,
-         std::size_t Height>
+template<match_config Cfg, typename Grid>
 [[nodiscard]] std::optional<cdt::offset_t>
-    match(Cfg const& config,
-          kpr::grid<Width, Height, Alloc> const& previous,
-          kpr::grid<Width, Height, Alloc> const& current) {
+    match(Cfg const& config, Grid const& previous, Grid const& current) {
   using namespace details;
-  using grid_t = kpr::grid<Width, Height, Alloc>;
 
   auto active{get_active(current)};
-  if (active < grid_t::region_count / 4) {
+  if (active < Grid::region_count / 4) {
     return {};
   }
 
-  collector_t<Cfg> tickets{config.get_allocator()};
-  tickets.reserve(grid_t::region_count);
+  collector_t<config_alloc_t<Cfg>> tickets{config.get_allocator()};
+  tickets.reserve(Grid::region_count);
 
   auto prev_regs{previous.regions()}, curr_regs{current.regions()};
 
-  for (std::size_t i{0}; i < grid_t::region_count; ++i) {
+  for (std::size_t i{0}; i < Grid::region_count; ++i) {
     tickets.push_back(cast_vote(config, prev_regs[i], curr_regs[i]));
   }
 
-  return declare<Cfg>(top_offsets(config, count<Cfg>(tickets), 2), active);
+  return declare(top_offsets(config, count<Cfg>(tickets), 2), active);
 }
 
 } // namespace kpm

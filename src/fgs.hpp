@@ -118,12 +118,14 @@ namespace details {
 
   template<typename It>
   void match_partial(It head, It first, It last) {
+    constexpr kpm::cell_size_t cell_size{15, 15};
+
     for (; first != last; ++first) {
-      if (auto vote{kpm::match(details::match_config{},
-                               head->grid_[0],
+      if (auto vote{kpm::match(head->grid_[0],
                                head->mask_,
                                first->grid_[0],
-                               first->mask_)};
+                               first->mask_,
+                               cell_size)};
           vote) {
         head->bind(head, first, *vote);
       }
