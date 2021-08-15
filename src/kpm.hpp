@@ -197,8 +197,8 @@ namespace details {
   }
 
   template<typename Tickets>
-  [[nodiscard]] std::optional<cdt::offset_t> declare(Tickets const& top,
-                                                     std::size_t region_count) {
+  [[nodiscard]] inline std::optional<cdt::offset_t>
+      declare(Tickets const& top, std::size_t region_count) {
     if (top.empty()) {
       return {};
     }
@@ -272,8 +272,8 @@ namespace details {
       return {offset_, matched_keypoints_};
     }
 
-    friend auto operator<=>(best_offset const& lhs,
-                            best_offset const& rhs) noexcept {
+    inline friend auto operator<=>(best_offset const& lhs,
+                                   best_offset const& rhs) noexcept {
       return lhs.matched_keypoints_ <=> rhs.matched_keypoints_;
     }
   };
@@ -369,11 +369,11 @@ namespace details {
 } // namespace details
 
 template<typename Region>
-[[nodiscard]] inline std::optional<vote> match(Region const& preg,
-                                               sid::mon::dimg_t const& pmask,
-                                               Region const& creg,
-                                               sid::mon::dimg_t const& cmask,
-                                               cell_size_t const& cell_size) {
+[[nodiscard]] std::optional<vote> match(Region const& preg,
+                                        sid::mon::dimg_t const& pmask,
+                                        Region const& creg,
+                                        sid::mon::dimg_t const& cmask,
+                                        cell_size_t const& cell_size) {
   using namespace details;
 
   auto offsets{count_offsets(preg, creg, cell_size)};
