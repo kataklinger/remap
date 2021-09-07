@@ -156,6 +156,8 @@ namespace details {
     details::pattern_counter<Size> counters{};
     details::counted_buffer<Size> buffer{};
 
+    auto limit{fragment.image_.end()};
+
     for (auto first{fragment.image_.data()}, col{first}, end{first + size};
          col < end;
          col += outstep) {
@@ -167,7 +169,8 @@ namespace details {
              current += instep) {
           buffer.reset();
         }
-        if (current < end) {
+
+        if (current < limit) {
           buffer.push(*current);
           if (buffer.ready()) {
             auto& count{counters[buffer.get()]};
@@ -214,12 +217,13 @@ namespace details {
       generate_heatmap(fgm::fragment_blend const& fragment) {
 
     auto& image{fragment.image_};
-
     auto hor{generate_heatmap_comp<Size>(
         fragment, 1, image.width(), image.size(), image.width())};
 
     auto ver{generate_heatmap_comp<Size>(
         fragment, image.width(), 1, image.width(), image.size())};
+
+    // mrl::matrix<std::uint32_t> hor{ver.dimensions()};
 
     return combine(hor, ver);
   }
