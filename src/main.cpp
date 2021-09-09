@@ -11,8 +11,6 @@
 #include <fstream>
 #include <iostream>
 
-std::filesystem::path const ddir{"../../../data/"};
-
 using file_list = std::vector<std::filesystem::path>;
 
 class file_feed {
@@ -245,23 +243,24 @@ private:
   callbacks_type callbacks_{};
 };
 
-void write_rgb(std::string filename, mrl::matrix<cpl::rgb_bc> const& image) {
-  png::write(ddir / filename, image.width(), image.height(), image.data());
+void write_rgb(std::filesystem::path const& filename,
+               mrl::matrix<cpl::rgb_bc> const& image) {
+  png::write(filename, image.width(), image.height(), image.data());
 }
 
-void build() {
-  mpb::builder builder{build_adapter{ddir / "seq"}};
+void build(std::filesystem::path const& dir) {
+  mpb::builder builder{build_adapter{dir}};
   auto results{builder.build()};
 
-  std::size_t i{0};
+  std::size_t i{};
   for (auto& result : results) {
     auto map{result.map([](auto c) noexcept { return native_to_blend(c); })};
-    write_rgb(std::format("art{}.png", ++i), map);
+    write_rgb(std::format("out{}.png", ++i), map);
   }
 }
 
-int main() {
-  build();
+int main(int argc, char* argv[]) {
+  build(argv[1]);
 
   return 0;
 }
