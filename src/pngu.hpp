@@ -1,3 +1,11 @@
+// LibPNG example
+// A.Greensted
+// http://www.labbookpages.co.uk
+
+// Version 2.0
+// With some minor corrections to Mandlebrot code (thanks to Jan-Oliver)
+
+// Version 1.0 - Initial release
 
 #pragma once
 
